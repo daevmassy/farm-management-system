@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block title %}Reports - Farm Management System{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-chart-bar"></i> Reports & Analytics</h1>
+        <div class="page-subtitle">Comprehensive farm performance overview</div>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addReportNoteModal')">
+        <i class="fas fa-paperclip"></i> Add Note / Reference
+    </button>
+</div>
+
+<!-- Financial Overview -->
+<div class="stats-grid" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-arrow-up"></i></div>
+        <div>
+            <div class="stat-value profit-positive">{{ "%.2f"|format(report.get('total_income', 0)) }}</div>
+            <div class="stat-label">Total Income</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon danger"><i class="fas fa-arrow-down"></i></div>
+        <div>
+            <div class="stat-value profit-negative">{{ "%.2f"|format(report.get('total_expenses', 0)) }}</div>
+            <div class="stat-label">Total Expenses</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        {% set profit = report.get('net_profit', 0) %}
+        <div class="stat-icon {{ '' if profit >= 0 else 'danger' }}"><i class="fas fa-balance-scale"></i></div>
+        <div>
+            <div class="stat-value {{ 'profit-positive' if profit >= 0 else 'profit-negative' }}">{{ "%.2f"|format(profit) }}</div>
+            <div class="stat-label">Net {{ 'Profit' if profit >= 0 else 'Loss' }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon warning"><i class="fas fa-tools"></i></div>
+        <div>
+            <div class="stat-value">{{ "%.2f"|format(report.get('total_maintenance_cost', 0)) }}</div>
+            <div class="stat-label">Maintenance Cost</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon danger"><i class="fas fa-exclamation-triangle"></i></div>
+        <div>
+            <div class="stat-value">{{ report.get('low_stock_count', 0) }}</div>
+            <div class="stat-label">Low Stock Items</div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-receipt"></i> Expenses by Category</span></div>
+        {% if report.get('expenses_by_cat') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Category</th><th>Count</th><th>Total</th></tr></thead>
+            <tbody>
+            {% for row in report.expenses_by_cat %}
+            <tr>
+                <td>{{ row.category }}</td>
+                <td>{{ row.count }}</td>
+                <td><strong class="profit-negative">{{ "%.2f"|format(row.total) }}</strong></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-chart-pie"></i><p>No expense data</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-hand-holding-usd"></i> Income by Source</span></div>
+        {% if report.get('income_by_source') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Source</th><th>Count</th><th>Total</th></tr></thead>
+            <tbody>
+            {% for row in report.income_by_source %}
+            <tr>
+                <td>{{ row.source }}</td>
+                <td>{{ row.count }}</td>
+                <td><strong class="profit-positive">{{ "%.2f"|format(row.total) }}</strong></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-hand-holding-usd"></i><p>No income data</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-layer-group"></i> Field Activities by Type</span></div>
+        {% if report.get('activities_by_type') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Activity Type</th><th>Count</th></tr></thead>
+            <tbody>
+            {% for row in report.activities_by_type %}
+            <tr>
+                <td><span class="badge badge-info">{{ row.activity_type | title }}</span></td>
+                <td>{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-seedling"></i><p>No field activity data</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-map"></i> Field Activity Count</span></div>
+        {% if report.get('field_activity') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Field</th><th>Activity Count</th></tr></thead>
+            <tbody>
+            {% for row in report.field_activity %}
+            <tr><td>{{ row.name }}</td><td>{{ row.activity_count }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-map-marked-alt"></i><p>No field data</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-tasks"></i> Task Status Breakdown</span></div>
+        {% if report.get('tasks_by_status') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Status</th><th>Count</th></tr></thead>
+            <tbody>
+            {% for row in report.tasks_by_status %}
+            <tr>
+                <td><span class="badge badge-{{ 'success' if row.status == 'completed' else 'info' if row.status == 'in_progress' else 'warning' if row.status == 'pending' else 'muted' }}">{{ row.status | replace('_',' ') | title }}</span></td>
+                <td>{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-clipboard-check"></i><p>No task data</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-horse"></i> Livestock by Species</span></div>
+        {% if report.get('livestock_by_species') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Species</th><th>Total Animals</th></tr></thead>
+            <tbody>
+            {% for row in report.livestock_by_species %}
+            <tr><td>{{ row.species }}</td><td><strong>{{ row.total }}</strong></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-horse"></i><p>No livestock data</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-boxes"></i> Inventory by Category</span></div>
+        {% if report.get('inventory_by_cat') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Category</th><th>Items</th><th>Total Qty</th></tr></thead>
+            <tbody>
+            {% for row in report.inventory_by_cat %}
+            <tr>
+                <td><span class="badge badge-muted">{{ row.category }}</span></td>
+                <td>{{ row.count }}</td>
+                <td>{{ "%.1f"|format(row.total_qty) if row.total_qty else '0' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-boxes"></i><p>No inventory data</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-tractor"></i> Equipment Status</span></div>
+        {% if report.get('equipment_by_status') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Status</th><th>Count</th></tr></thead>
+            <tbody>
+            {% for row in report.equipment_by_status %}
+            <tr>
+                <td><span class="badge badge-{{ 'success' if row.status == 'operational' else 'danger' if row.status == 'broken' else 'warning' }}">{{ row.status | replace('_',' ') | title }}</span></td>
+                <td>{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-tractor"></i><p>No equipment data</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Report Notes & References Section -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-paperclip"></i> Report Notes & References</h3>
+        <span class="badge">{{ report_attachments|length }}</span>
+    </div>
+    <p class="setting-desc">Attach supporting documents, reference images, or notes related to this farm's reports — analysis files, audit documents, crop guides, market data, etc.</p>
+
+    {% set imgs = report_attachments | selectattr('category', 'equalto', 'image') | list %}
+    {% set docs = report_attachments | rejectattr('category', 'equalto', 'image') | list %}
+
+    {% if imgs %}
+    <div class="attach-section-label"><i class="fas fa-images"></i> Images & Charts ({{ imgs|length }})</div>
+    <div class="attach-image-grid" style="margin-bottom:16px;">
+        {% for img in imgs %}
+        <div class="attach-thumb">
+            <a href="{{ url_for('view_file', file_id=img.id) }}" target="_blank">
+                <img src="{{ url_for('static', filename='uploads/' ~ img.farm_id ~ '/' ~ img.stored_filename) }}"
+                     alt="{{ img.original_filename }}" onerror="this.parentElement.style.display='none'">
+            </a>
+            <p class="attach-name" title="{{ img.original_filename }}">{{ img.original_filename[:22] }}{% if img.original_filename|length > 22 %}…{% endif %}</p>
+            {% if img.description %}<p class="attach-desc">{{ img.description }}</p>{% endif %}
+            <div class="attach-actions">
+                <a href="{{ url_for('download_file', file_id=img.id) }}" class="btn btn-sm btn-outline"><i class="fas fa-download"></i></a>
+                <form method="POST" action="{{ url_for('delete_attachment', file_id=img.id) }}" style="display:inline" onsubmit="return confirm('Delete?')">
+                    <input type="hidden" name="back_url" value="{{ request.url }}">
+                    <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if docs %}
+    <div class="attach-section-label"><i class="fas fa-file-alt"></i> Documents ({{ docs|length }})</div>
+    <div class="attach-doc-list" style="margin-bottom:20px;">
+        {% for d in docs %}
+        <div class="attach-doc-row">
+            <i class="fas {{ 'fa-file-pdf text-danger' if d.file_type == 'pdf' else 'fa-file-word text-info' if d.file_type in ['doc','docx'] else 'fa-file-excel text-success' if d.file_type in ['xls','xlsx','csv'] else 'fa-file' }}"></i>
+            <div class="attach-doc-info">
+                <span class="attach-doc-name" title="{{ d.original_filename }}">{{ d.original_filename[:50] }}{% if d.original_filename|length > 50 %}…{% endif %}</span>
+                {% if d.description %}<small class="text-muted"> — {{ d.description }}</small>{% endif %}
+                <small class="text-muted" style="display:block;">by {{ d.uploader or '?' }} · {{ d.uploaded_at.strftime('%d %b %Y') if d.uploaded_at else '' }}</small>
+            </div>
+            <div class="attach-doc-btns">
+                <a href="{{ url_for('view_file', file_id=d.id) }}" target="_blank" class="btn btn-sm btn-outline"><i class="fas fa-eye"></i></a>
+                <a href="{{ url_for('download_file', file_id=d.id) }}" class="btn btn-sm btn-outline"><i class="fas fa-download"></i></a>
+                <form method="POST" action="{{ url_for('delete_attachment', file_id=d.id) }}" style="display:inline" onsubmit="return confirm('Delete?')">
+                    <input type="hidden" name="back_url" value="{{ request.url }}">
+                    <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not report_attachments %}
+    <div class="attach-empty" style="margin:12px 0;">
+        <i class="fas fa-folder-open"></i>
+        <p>No reference documents added yet. Use the button below to attach.</p>
+    </div>
+    {% endif %}
+
+    <!-- Inline upload form for reports -->
+    <form method="POST" action="{{ url_for('attach_file', entity_type='report', entity_id=farm_id) }}" enctype="multipart/form-data" class="report-upload-form">
+        <input type="hidden" name="back_url" value="{{ request.url }}">
+        <div class="attach-upload-row" style="align-items:center;">
+            <label class="attach-file-btn">
+                <i class="fas fa-folder-open"></i> Choose File
+                <input type="file" name="file" id="reportFileInput" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" style="display:none" onchange="document.getElementById('reportFileName').textContent = this.files[0]?.name || 'No file chosen'" required>
+            </label>
+            <span id="reportFileName" style="font-size:13px;color:var(--text-muted);flex:0 0 auto;">No file chosen</span>
+            <input type="text" name="description" class="form-control" placeholder="Description — e.g. Q2 Market Analysis, Audit Report" maxlength="200" style="flex:1;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button>
+        </div>
+        <p class="setting-hint"><i class="fas fa-info-circle"></i> Supported: Images, PDF, Word, Excel, CSV, TXT — max 16 MB</p>
+    </form>
+</div>
+
+<!-- Add Note Modal (alternative quick-add) -->
+<div class="modal-overlay" id="addReportNoteModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-paperclip"></i> Add Report Note / Reference</span>
+            <button class="modal-close" onclick="closeModal('addReportNoteModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('attach_file', entity_type='report', entity_id=farm_id) }}" enctype="multipart/form-data">
+                <input type="hidden" name="back_url" value="{{ request.url }}">
+                <div class="upload-drop-zone" onclick="document.getElementById('modalReportFile').click()">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Click to choose file</p>
+                    <small>Images, PDF, Word, Excel, CSV, TXT — max 16 MB</small>
+                </div>
+                <input type="file" id="modalReportFile" name="file"
+                       accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                       style="display:none" required
+                       onchange="document.querySelector('.upload-drop-zone p').textContent = this.files[0]?.name || 'Click to choose file'">
+                <div class="form-group" style="margin-top:12px;">
+                    <label class="form-label">Description</label>
+                    <input type="text" name="description" class="form-control"
+                           placeholder="e.g. Q3 Harvest Report, Market Quotation, Crop Guide" maxlength="300">
+                </div>
+                <div class="modal-footer" style="padding:0;margin-top:16px;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('addReportNoteModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+</script>
+{% endblock %}

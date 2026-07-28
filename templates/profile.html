@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Profile & Settings – FarmMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-user-circle"></i> Profile & Settings</h1>
+        <p class="page-sub">Manage your account, profile picture, and farm branding</p>
+    </div>
+</div>
+
+<div class="profile-layout">
+
+    <!-- LEFT: Profile Card -->
+    <div class="profile-left">
+
+        <!-- Avatar Card -->
+        <div class="section-card profile-avatar-card">
+            <div class="avatar-display">
+                {% if user and user.avatar_path %}
+                    <img src="{{ url_for('static', filename=user.avatar_path) }}"
+                         alt="{{ user.username }}" class="avatar-large" id="avatarPreview">
+                {% else %}
+                    <div class="avatar-initials-large" id="avatarInitials">
+                        {{ session.get('username', 'U')[0].upper() }}
+                    </div>
+                {% endif %}
+                <div class="avatar-overlay" onclick="document.getElementById('avatarInput').click()">
+                    <i class="fas fa-camera"></i>
+                    <span>Change photo</span>
+                </div>
+            </div>
+            <div class="avatar-info">
+                <h3>{{ user.username if user else session.get('username') }}</h3>
+                <span class="role-pill role-{{ user.role if user else session.get('role') }}">
+                    {{ (user.role if user else session.get('role', '')).replace('_', ' ').title() }}
+                </span>
+                <p class="avatar-farm">{{ user.farm_name if user else session.get('farm_name') }}</p>
+            </div>
+            <!-- Avatar upload form -->
+            <form method="POST" action="{{ url_for('upload_avatar') }}" enctype="multipart/form-data" id="avatarForm">
+                <input type="file" id="avatarInput" name="avatar"
+                       accept=".jpg,.jpeg,.png,.gif,.webp" style="display:none"
+                       onchange="previewAvatar(this); this.form.submit();">
+            </form>
+            {% if user and user.avatar_path %}
+            <form method="POST" action="{{ url_for('remove_avatar') }}" style="margin-top:8px">
+                <button type="submit" class="btn btn-sm btn-outline btn-danger-outline"
+                        onclick="return confirm('Remove profile picture?')">
+                    <i class="fas fa-trash"></i> Remove photo
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
+        <!-- Farm Logo Card (owner only) -->
+        {% if session.get('role') == 'owner' %}
+        <div class="section-card">
+            <div class="section-header">
+                <h3><i class="fas fa-store"></i> Farm Logo</h3>
+            </div>
+            <p class="setting-desc">Your logo appears in the sidebar and represents your farm brand.</p>
+            <div class="logo-display">
+                {% if user and user.logo_path %}
+                    <img src="{{ url_for('static', filename=user.logo_path) }}"
+                         alt="Farm Logo" class="logo-preview" id="logoPreview">
+                {% else %}
+                    <div class="logo-placeholder" id="logoPlaceholder">
+                        <i class="fas fa-seedling"></i>
+                        <span>No logo yet</span>
+                    </div>
+                {% endif %}
+            </div>
+            <form method="POST" action="{{ url_for('upload_farm_logo') }}" enctype="multipart/form-data" id="logoForm">
+                <input type="file" id="logoInput" name="logo"
+                       accept=".jpg,.jpeg,.png,.gif,.webp" style="display:none"
+                       onchange="previewLogo(this); this.form.submit();">
+            </form>
+            <div class="logo-actions">
+                <button type="button" class="btn btn-primary btn-sm"
+                        onclick="document.getElementById('logoInput').click()">
+                    <i class="fas fa-upload"></i> Upload Logo
+                </button>
+                {% if user and user.logo_path %}
+                <form method="POST" action="{{ url_for('remove_farm_logo') }}" style="display:inline">
+                    <button type="submit" class="btn btn-sm btn-outline btn-danger-outline"
+                            onclick="return confirm('Remove farm logo?')">
+                        <i class="fas fa-trash"></i> Remove
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            <p class="setting-hint"><i class="fas fa-info-circle"></i> JPG, PNG, GIF or WebP — recommended 200×200 px</p>
+        </div>
+        {% endif %}
+
+    </div>
+
+    <!-- RIGHT: Settings Forms -->
+    <div class="profile-right">
+
+        <!-- Account Settings -->
+        <div class="section-card">
+            <div class="section-header">
+                <h3><i class="fas fa-id-card"></i> Account Details</h3>
+            </div>
+            <form method="POST" action="{{ url_for('update_profile') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Username *</label>
+                        <input type="text" name="username" class="form-control"
+                               value="{{ user.username if user else '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email Address *</label>
+                        <input type="email" name="email" class="form-control"
+                               value="{{ user.email if user else '' }}" required>
+                    </div>
+                </div>
+                <hr class="divider">
+                <p class="setting-desc"><i class="fas fa-lock"></i> Change Password — leave blank to keep current password</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">New Password</label>
+                        <input type="password" name="new_password" class="form-control"
+                               placeholder="Min. 6 characters" minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Confirm Password</label>
+                        <input type="password" name="confirm_password" class="form-control"
+                               placeholder="Repeat new password">
+                    </div>
+                </div>
+                <div class="form-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Farm Info (read-only for non-owners) -->
+        <div class="section-card">
+            <div class="section-header">
+                <h3><i class="fas fa-tractor"></i> Farm Information</h3>
+                <span class="badge">{{ user.farm_name if user and user.farm_name else session.get('farm_name') }}</span>
+            </div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Farm Name</span>
+                    <span class="info-value">{{ user.farm_name if user and user.farm_name else '—' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Location</span>
+                    <span class="info-value">{{ user.location if user and user.location else '—' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Total Area</span>
+                    <span class="info-value">
+                        {% if user and user.total_area %}
+                            {{ user.total_area }} {{ user.area_unit or 'acres' }}
+                        {% else %}—{% endif %}
+                    </span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Your Role</span>
+                    <span class="info-value">
+                        <span class="role-pill role-{{ user.role if user else '' }}">
+                            {{ (user.role if user else '').replace('_', ' ').title() }}
+                        </span>
+                    </span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Member Since</span>
+                    <span class="info-value">
+                        {{ user.created_at.strftime('%d %B %Y') if user and user.created_at else '—' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function previewAvatar(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        let img = document.getElementById('avatarPreview');
+        const init = document.getElementById('avatarInitials');
+        if (!img) {
+            img = document.createElement('img');
+            img.id = 'avatarPreview';
+            img.className = 'avatar-large';
+            if (init) init.replaceWith(img);
+        }
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+function previewLogo(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        let img = document.getElementById('logoPreview');
+        const placeholder = document.getElementById('logoPlaceholder');
+        if (!img) {
+            img = document.createElement('img');
+            img.id = 'logoPreview';
+            img.className = 'logo-preview';
+            if (placeholder) placeholder.replaceWith(img);
+        }
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+</script>
+{% endblock %}

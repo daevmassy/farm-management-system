@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Tasks & Schedule - Farm Management System{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-tasks"></i> Tasks & Scheduling</h1>
+        <div class="page-subtitle">Assign and track all farm tasks and worker assignments</div>
+    </div>
+    {% if session.get('role') in ['owner','manager'] %}
+    <button class="btn btn-primary" onclick="openModal('addTaskModal')">
+        <i class="fas fa-plus"></i> Create Task
+    </button>
+    {% endif %}
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+    <form method="GET" action="{{ url_for('tasks') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select name="status" class="filter-select" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="pending" {{ 'selected' if status_filter == 'pending' }}>Pending</option>
+            <option value="in_progress" {{ 'selected' if status_filter == 'in_progress' }}>In Progress</option>
+            <option value="completed" {{ 'selected' if status_filter == 'completed' }}>Completed</option>
+            <option value="cancelled" {{ 'selected' if status_filter == 'cancelled' }}>Cancelled</option>
+        </select>
+        <select name="priority" class="filter-select" onchange="this.form.submit()">
+            <option value="">All Priorities</option>
+            <option value="high" {{ 'selected' if priority_filter == 'high' }}>High</option>
+            <option value="medium" {{ 'selected' if priority_filter == 'medium' }}>Medium</option>
+            <option value="low" {{ 'selected' if priority_filter == 'low' }}>Low</option>
+        </select>
+        {% if status_filter or priority_filter %}
+        <a href="{{ url_for('tasks') }}" class="btn btn-secondary btn-sm">Clear</a>
+        {% endif %}
+    </form>
+    <span style="font-size:13px;color:var(--text-muted);">{{ tasks|length }} task(s)</span>
+</div>
+
+<div class="card">
+    {% if tasks %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th><th>Type</th><th>Field</th><th>Assigned To</th>
+                <th>Due Date</th><th>Priority</th><th>Status</th>
+                <th>Est. Hrs</th><th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for t in tasks %}
+        <tr>
+            <td>
+                <strong>{{ t.title }}</strong>
+                {% if t.description %}<div style="font-size:11px;color:var(--text-muted);">{{ t.description[:60] }}{% if t.description|length > 60 %}...{% endif %}</div>{% endif %}
+            </td>
+            <td>{{ t.task_type or '—' }}</td>
+            <td>{{ t.field_name or '—' }}</td>
+            <td>{{ t.assignee_name or '—' }}</td>
+            <td>
+                {% if t.due_date %}
+                    {% if t.due_date < today and t.status != 'completed' %}
+                        <span style="color:var(--danger);font-weight:600;">{{ t.due_date.strftime('%d %b') }} !</span>
+                    {% else %}
+                        {{ t.due_date.strftime('%d %b %Y') }}
+                    {% endif %}
+                {% else %}—{% endif %}
+            </td>
+            <td><span class="priority-{{ t.priority }}">{{ t.priority | title }}</span></td>
+            <td><span class="badge badge-{{ 'success' if t.status == 'completed' else 'info' if t.status == 'in_progress' else 'warning' if t.status == 'pending' else 'muted' }}">{{ t.status | replace('_',' ') | title }}</span></td>
+            <td>{{ t.estimated_hours or '—' }}</td>
+            <td>
+                <div style="display:flex;gap:4px;">
+                    <button class="btn btn-secondary btn-sm" onclick="openUpdateModal({{ t.id }}, '{{ t.status }}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    {% if session.get('role') in ['owner','manager'] %}
+                    <form method="POST" action="{{ url_for('delete_task', task_id=t.id) }}" style="display:inline;" onsubmit="return confirm('Delete this task?')">
+                        <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                    </form>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-clipboard-check"></i><p>No tasks found. {% if session.get('role') in ['owner','manager'] %}Create your first task!{% endif %}</p></div>
+    {% endif %}
+</div>
+
+<!-- Create Task Modal -->
+{% if session.get('role') in ['owner','manager'] %}
+<div class="modal-overlay" id="addTaskModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-plus-circle"></i> Create New Task</span>
+            <button class="modal-close" onclick="closeModal('addTaskModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_task') }}">
+                <div class="form-group">
+                    <label>Task Title *</label>
+                    <input type="text" name="title" placeholder="e.g. Spray North Block for aphids" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Task Type</label>
+                        <select name="task_type">
+                            <option value="">Select type...</option>
+                            <option>Planting</option><option>Spraying</option><option>Fertilizing</option>
+                            <option>Harvesting</option><option>Irrigation</option><option>Weeding</option>
+                            <option>Maintenance</option><option>Scouting</option><option>Transport</option><option>Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Field (Optional)</label>
+                        <select name="field_id">
+                            <option value="">No specific field</option>
+                            {% for f in fields %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Assign To</label>
+                        <select name="assigned_to">
+                            <option value="">Unassigned</option>
+                            {% for w in workers %}<option value="{{ w.id }}">{{ w.username }} ({{ w.role | replace('_',' ') }})</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Due Date</label>
+                        <input type="date" name="due_date">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <select name="priority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Estimated Hours</label>
+                        <input type="number" step="0.5" name="estimated_hours" placeholder="e.g. 4">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" placeholder="Describe what needs to be done..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Create Task
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Update Task Modal -->
+<div class="modal-overlay" id="updateTaskModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-edit"></i> Update Task Status</span>
+            <button class="modal-close" onclick="closeModal('updateTaskModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="updateTaskForm" method="POST">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status" id="taskStatusSelect">
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Actual Hours Spent</label>
+                        <input type="number" step="0.5" name="actual_hours" placeholder="e.g. 3.5">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Update Task
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openUpdateModal(taskId, currentStatus) {
+    document.getElementById('updateTaskForm').action = '/tasks/update/' + taskId;
+    document.getElementById('taskStatusSelect').value = currentStatus;
+    openModal('updateTaskModal');
+}
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+</script>
+{% endblock %}

@@ -1,0 +1,37 @@
+Act as an expert Product Manager and Software Architect specializing in AgTech (Agricultural Technology). 
+
+I need you to help me design a comprehensive, all-in-one Farm Management System (FMS) application. This platform will be used by farm owners, managers, and field workers to handle all daily operations, records, and long-term planning. 
+
+Please break down the system architecture and feature requirements into the following modules:
+
+1. Core Dashboard & Overview:
+- Multi-farm and multi-field management with GIS/GPS mapping integrations.
+- Weather forecasting integration and localized alerts.
+- A quick-glance daily task and alert center.
+
+2. Crop & Livestock Management (Farming Activities & Records):
+- Field logs: planting, spraying, fertilizing, scouting, and harvesting data.
+- Input tracking: seed varieties, chemicals, and fertilizers used (with regulatory compliance logging).
+- Livestock tracking (if applicable): health records, breeding, feeding, and location/pasture management.
+
+3. Scheduling & Task Management:
+- Dynamic calendar for seasonal planning and daily assignments.
+- Workforce management: assigning tasks to specific workers, tracking progress, and hours worked.
+- Automated reminders for critical farming windows (e.g., optimal planting or harvesting dates based on data).
+
+4. Financial Management & Reporting:
+- Cost accounting per field, crop cycle, or livestock group.
+- Expense and income logging (invoices, receipts, labor costs, fuel, inputs).
+- Profitability analysis, cash flow forecasting, and ROI reporting.
+
+5. Machinery, Equipment, & Inventory Management:
+- Fleet tracking: usage hours, fuel consumption, and GPS tracking.
+- Maintenance scheduling: automated alerts for routine servicing (oil changes, parts replacement) to prevent downtime.
+- Inventory control: real-time tracking of seeds, chemicals, spare parts, and harvested crops in storage (silos/warehouses).
+
+6. Technical & Usability Requirements:
+- Offline-first capabilities (crucial for remote fields with poor connectivity) with automatic cloud syncing.
+- User roles and permissions (Owner, Manager, Field Worker, Accountant).
+- Mobile-responsive web app and native mobile apps (iOS/Android).
+
+Format your response with clear headings, bullet points, and a summary table of the core database entities that will be required to tie these modules together.

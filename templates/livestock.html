@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}Livestock - Farm Management System{% endblock %}
+
+{% macro attach_panel(entity_type, entity_id, atts) %}
+{% set imgs = atts | selectattr('category', 'equalto', 'image') | list %}
+{% set docs = atts | rejectattr('category', 'equalto', 'image') | list %}
+<div class="attach-panel">
+  {% if imgs %}
+  <div class="attach-section-label"><i class="fas fa-images"></i> Images ({{ imgs|length }})</div>
+  <div class="attach-image-grid">
+    {% for img in imgs %}
+    <div class="attach-thumb">
+      <a href="{{ url_for('view_file', file_id=img.id) }}" target="_blank">
+        <img src="{{ url_for('static', filename='uploads/' ~ img.farm_id ~ '/' ~ img.stored_filename) }}"
+             alt="{{ img.original_filename }}" onerror="this.parentElement.style.display='none'">
+      </a>
+      <p class="attach-name" title="{{ img.original_filename }}">{{ img.original_filename[:22] }}{% if img.original_filename|length > 22 %}…{% endif %}</p>
+      <div class="attach-actions">
+        <a href="{{ url_for('download_file', file_id=img.id) }}" class="btn btn-sm btn-outline" title="Download"><i class="fas fa-download"></i></a>
+        <form method="POST" action="{{ url_for('delete_attachment', file_id=img.id) }}" style="display:inline" onsubmit="return confirm('Delete this attachment?')">
+          <input type="hidden" name="back_url" value="{{ request.url }}">
+          <button class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if docs %}
+  <div class="attach-section-label"><i class="fas fa-file-alt"></i> Documents ({{ docs|length }})</div>
+  <div class="attach-doc-list">
+    {% for d in docs %}
+    <div class="attach-doc-row">
+      <i class="fas {{ 'fa-file-pdf text-danger' if d.file_type == 'pdf' else 'fa-file-word text-info' if d.file_type in ['doc','docx'] else 'fa-file-excel text-success' if d.file_type in ['xls','xlsx','csv'] else 'fa-file' }}"></i>
+      <div class="attach-doc-info">
+        <span class="attach-doc-name" title="{{ d.original_filename }}">{{ d.original_filename[:40] }}{% if d.original_filename|length > 40 %}…{% endif %}</span>
+        {% if d.description %}<small class="text-muted"> — {{ d.description }}</small>{% endif %}
+      </div>
+      <div class="attach-doc-btns">
+        <a href="{{ url_for('view_file', file_id=d.id) }}" target="_blank" class="btn btn-sm btn-outline" title="View"><i class="fas fa-eye"></i></a>
+        <a href="{{ url_for('download_file', file_id=d.id) }}" class="btn btn-sm btn-outline" title="Download"><i class="fas fa-download"></i></a>
+        <form method="POST" action="{{ url_for('delete_attachment', file_id=d.id) }}" style="display:inline" onsubmit="return confirm('Delete?')">
+          <input type="hidden" name="back_url" value="{{ request.url }}">
+          <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if not imgs and not docs %}
+  <div class="attach-empty"><i class="fas fa-paperclip"></i><p>No attachments yet</p></div>
+  {% endif %}
+  <div class="attach-upload-form">
+    <div class="attach-upload-label"><i class="fas fa-upload"></i> Add Attachment</div>
+    <form method="POST" action="{{ url_for('attach_file', entity_type=entity_type, entity_id=entity_id) }}" enctype="multipart/form-data">
+      <input type="hidden" name="back_url" value="{{ request.url }}">
+      <div class="attach-upload-row">
+        <label class="attach-file-btn">
+          <i class="fas fa-folder-open"></i> Choose File
+          <input type="file" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" style="display:none" required>
+        </label>
+        <input type="text" name="description" class="form-control" placeholder="Description (optional)" maxlength="200" style="flex:1;">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Attach</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-horse"></i> Livestock Management</h1>
+        <div class="page-subtitle">Track herds, health records, breeding and feeding</div>
+    </div>
+    {% if session.get('role') in ['owner','manager'] %}
+    <button class="btn btn-primary" onclick="openModal('addGroupModal')">
+        <i class="fas fa-plus"></i> Add Livestock Group
+    </button>
+    {% endif %}
+</div>
+
+<!-- Livestock Groups -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-th-large"></i> Livestock Groups</span>
+    </div>
+    {% if groups %}
+    <div class="grid-3" style="gap:14px;padding:4px 0;">
+        {% for g in groups %}
+        {% set g_atts = attachments.get(('livestock_group', g.id), []) %}
+        <div class="card" style="margin:0;border:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                <div>
+                    <div style="font-size:15px;font-weight:700;">{{ g.name }}</div>
+                    <div style="font-size:12px;color:var(--text-muted);">{{ g.species }}{% if g.breed %} &bull; {{ g.breed }}{% endif %}</div>
+                </div>
+                <span class="badge badge-{{ 'success' if g.status == 'active' else 'muted' }}">{{ g.status }}</span>
+            </div>
+            {% set img_list = g_atts | selectattr('category', 'equalto', 'image') | list %}
+            {% if img_list %}
+            <div class="group-img-strip">
+                {% for img in img_list[:3] %}
+                <a href="{{ url_for('view_file', file_id=img.id) }}" target="_blank">
+                    <img src="{{ url_for('static', filename='uploads/' ~ img.farm_id ~ '/' ~ img.stored_filename) }}"
+                         alt="{{ img.original_filename }}" class="group-strip-img">
+                </a>
+                {% endfor %}
+                {% if img_list|length > 3 %}<span class="more-imgs">+{{ img_list|length - 3 }}</span>{% endif %}
+            </div>
+            {% endif %}
+            <div style="display:flex;gap:16px;margin-bottom:12px;">
+                <div style="text-align:center;">
+                    <div style="font-size:22px;font-weight:700;color:var(--primary);">{{ g.count }}</div>
+                    <div style="font-size:11px;color:var(--text-muted);">Animals</div>
+                </div>
+                {% if g.location %}
+                <div>
+                    <div style="font-size:12px;color:var(--text-muted);"><i class="fas fa-map-marker-alt"></i> {{ g.location }}</div>
+                </div>
+                {% endif %}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-sm" onclick="openRecordModal({{ g.id }}, '{{ g.name }}')">
+                    <i class="fas fa-plus"></i> Add Record
+                </button>
+                <button class="btn btn-sm btn-outline attach-btn" onclick="openAttach('livestock_group', {{ g.id }}, '{{ g.name }}')" title="Attachments">
+                    <i class="fas fa-paperclip"></i>{% if g_atts %}<span class="attach-cnt">{{ g_atts|length }}</span>{% endif %}
+                </button>
+                {% if session.get('role') in ['owner','manager'] %}
+                <form method="POST" action="{{ url_for('delete_livestock', group_id=g.id) }}" style="display:inline;" onsubmit="return confirm('Delete this group?')">
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        <template id="attach-livestock_group-{{ g.id }}">
+            {{ attach_panel('livestock_group', g.id, g_atts) }}
+        </template>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-horse"></i><p>No livestock groups added yet</p></div>
+    {% endif %}
+</div>
+
+<!-- Records Table -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-clipboard"></i> Livestock Records</span>
+    </div>
+    {% if records %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th><th>Group</th><th>Species</th><th>Record Type</th>
+                <th>Description</th><th>Qty</th><th>Cost</th><th>Notes</th>
+                <th><i class="fas fa-paperclip" title="Attachments"></i></th>
+                {% if session.get('role') in ['owner','manager'] %}<th>Del</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in records %}
+        {% set r_atts = attachments.get(('livestock_record', r.id), []) %}
+        <tr>
+            <td>{{ r.record_date.strftime('%d %b %Y') if r.record_date else '—' }}</td>
+            <td>{{ r.group_name }}</td>
+            <td>{{ r.species }}</td>
+            <td><span class="badge badge-{{ 'danger' if r.record_type == 'health' else 'info' if r.record_type == 'breeding' else 'warning' if r.record_type == 'feeding' else 'muted' }}">{{ r.record_type | title }}</span></td>
+            <td>{{ r.description or '—' }}</td>
+            <td>{{ r.quantity or '—' }}</td>
+            <td>{{ "%.2f"|format(r.cost) if r.cost else '—' }}</td>
+            <td>{{ r.notes or '—' }}</td>
+            <td>
+                <button class="btn btn-sm btn-outline attach-btn" onclick="openAttach('livestock_record', {{ r.id }}, '{{ r.record_type|title }} – {{ r.group_name }}')" title="Attachments">
+                    <i class="fas fa-paperclip"></i>{% if r_atts %}<span class="attach-cnt">{{ r_atts|length }}</span>{% endif %}
+                </button>
+                <template id="attach-livestock_record-{{ r.id }}">
+                    {{ attach_panel('livestock_record', r.id, r_atts) }}
+                </template>
+            </td>
+            {% if session.get('role') in ['owner','manager'] %}
+            <td>
+                <form method="POST" action="{{ url_for('delete_livestock_record', record_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete this record?')">
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-file-medical-alt"></i><p>No livestock records yet</p></div>
+    {% endif %}
+</div>
+
+<!-- Add Group Modal -->
+{% if session.get('role') in ['owner','manager'] %}
+<div class="modal-overlay" id="addGroupModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-horse"></i> Add Livestock Group</span>
+            <button class="modal-close" onclick="closeModal('addGroupModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_livestock') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Group Name *</label>
+                        <input type="text" name="name" placeholder="e.g. Dairy Herd A" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Species *</label>
+                        <select name="species" required>
+                            <option value="">Select...</option>
+                            <option>Cattle</option><option>Sheep</option><option>Goats</option>
+                            <option>Pigs</option><option>Poultry</option><option>Horses</option>
+                            <option>Rabbits</option><option>Camels</option><option>Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Breed</label>
+                        <input type="text" name="breed" placeholder="e.g. Friesian, Merino">
+                    </div>
+                    <div class="form-group">
+                        <label>Count</label>
+                        <input type="number" name="count" value="0" min="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Location / Pasture</label>
+                    <input type="text" name="location" placeholder="e.g. East Pasture, Pen 3">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional notes..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-plus"></i> Add Group
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Add Record Modal -->
+<div class="modal-overlay" id="addRecordModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-clipboard-list"></i> Add Livestock Record</span>
+            <button class="modal-close" onclick="closeModal('addRecordModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_livestock_record') }}">
+                <input type="hidden" name="livestock_group_id" id="recordGroupId">
+                <div class="form-group" style="margin-bottom:14px;">
+                    <div id="recordGroupName" style="font-weight:600;font-size:14px;color:var(--primary);"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Record Type *</label>
+                        <select name="record_type" required>
+                            <option value="">Select...</option>
+                            <option value="health">Health / Veterinary</option>
+                            <option value="breeding">Breeding</option>
+                            <option value="feeding">Feeding</option>
+                            <option value="movement">Movement</option>
+                            <option value="birth">Birth</option>
+                            <option value="death">Death</option>
+                            <option value="sale">Sale</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" name="record_date" required value="{{ today }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" placeholder="e.g. Vaccination - FMD, Fed 50kg hay">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" step="0.01" name="quantity" placeholder="e.g. 5 animals">
+                    </div>
+                    <div class="form-group">
+                        <label>Cost</label>
+                        <input type="number" step="0.01" name="cost" placeholder="e.g. 2500.00">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional details..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Save Record
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openRecordModal(groupId, groupName) {
+    document.getElementById('recordGroupId').value = groupId;
+    document.getElementById('recordGroupName').textContent = 'Group: ' + groupName;
+    openModal('addRecordModal');
+}
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+</script>
+{% endblock %}

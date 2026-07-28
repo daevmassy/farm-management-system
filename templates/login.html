@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Sign In - Farm Management System{% endblock %}
+{% block auth_content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <i class="fas fa-seedling"></i>
+            <h1>Farm Management System</h1>
+            <p>Sign in to manage your farm operations</p>
+        </div>
+        <div class="auth-tabs">
+            <a href="{{ url_for('login') }}" class="auth-tab active">Sign In</a>
+            <a href="{{ url_for('register') }}" class="auth-tab">Register</a>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}" style="margin-bottom:14px;">
+                    <i class="fas {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-circle' }}"></i>{{ message }}
+                </div>
+            {% endfor %}{% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('login') }}" class="auth-form">
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" name="email" placeholder="your@email.com" required autofocus>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" placeholder="Enter your password" required>
+            </div>
+            <button type="submit" class="btn btn-primary auth-submit">
+                <i class="fas fa-sign-in-alt"></i> Sign In
+            </button>
+        </form>
+        <p style="text-align:center;margin-top:18px;font-size:13px;color:var(--text-muted);">
+            New to FarmMS? <a href="{{ url_for('register') }}" style="color:var(--primary);text-decoration:none;font-weight:600;">Create an account</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

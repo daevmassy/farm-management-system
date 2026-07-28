@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% block title %}Finance - Farm Management System{% endblock %}
+
+{% macro attach_panel(entity_type, entity_id, atts) %}
+{% set imgs = atts | selectattr('category', 'equalto', 'image') | list %}
+{% set docs = atts | rejectattr('category', 'equalto', 'image') | list %}
+<div class="attach-panel">
+  {% if imgs %}
+  <div class="attach-section-label"><i class="fas fa-images"></i> Images / Receipts ({{ imgs|length }})</div>
+  <div class="attach-image-grid">
+    {% for img in imgs %}
+    <div class="attach-thumb">
+      <a href="{{ url_for('view_file', file_id=img.id) }}" target="_blank">
+        <img src="{{ url_for('static', filename='uploads/' ~ img.farm_id ~ '/' ~ img.stored_filename) }}"
+             alt="{{ img.original_filename }}" onerror="this.parentElement.style.display='none'">
+      </a>
+      <p class="attach-name" title="{{ img.original_filename }}">{{ img.original_filename[:22] }}{% if img.original_filename|length > 22 %}…{% endif %}</p>
+      <div class="attach-actions">
+        <a href="{{ url_for('download_file', file_id=img.id) }}" class="btn btn-sm btn-outline"><i class="fas fa-download"></i></a>
+        <form method="POST" action="{{ url_for('delete_attachment', file_id=img.id) }}" style="display:inline" onsubmit="return confirm('Delete?')">
+          <input type="hidden" name="back_url" value="{{ request.url }}">
+          <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if docs %}
+  <div class="attach-section-label"><i class="fas fa-file-alt"></i> Documents ({{ docs|length }})</div>
+  <div class="attach-doc-list">
+    {% for d in docs %}
+    <div class="attach-doc-row">
+      <i class="fas {{ 'fa-file-pdf text-danger' if d.file_type == 'pdf' else 'fa-file-word text-info' if d.file_type in ['doc','docx'] else 'fa-file-excel text-success' if d.file_type in ['xls','xlsx','csv'] else 'fa-file' }}"></i>
+      <div class="attach-doc-info">
+        <span class="attach-doc-name" title="{{ d.original_filename }}">{{ d.original_filename[:40] }}{% if d.original_filename|length > 40 %}…{% endif %}</span>
+        {% if d.description %}<small class="text-muted"> — {{ d.description }}</small>{% endif %}
+      </div>
+      <div class="attach-doc-btns">
+        <a href="{{ url_for('view_file', file_id=d.id) }}" target="_blank" class="btn btn-sm btn-outline"><i class="fas fa-eye"></i></a>
+        <a href="{{ url_for('download_file', file_id=d.id) }}" class="btn btn-sm btn-outline"><i class="fas fa-download"></i></a>
+        <form method="POST" action="{{ url_for('delete_attachment', file_id=d.id) }}" style="display:inline" onsubmit="return confirm('Delete?')">
+          <input type="hidden" name="back_url" value="{{ request.url }}">
+          <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if not imgs and not docs %}
+  <div class="attach-empty"><i class="fas fa-receipt"></i><p>No receipts or documents attached yet</p></div>
+  {% endif %}
+  <div class="attach-upload-form">
+    <div class="attach-upload-label"><i class="fas fa-upload"></i> Attach Receipt / Document</div>
+    <form method="POST" action="{{ url_for('attach_file', entity_type=entity_type, entity_id=entity_id) }}" enctype="multipart/form-data">
+      <input type="hidden" name="back_url" value="{{ request.url }}">
+      <div class="attach-upload-row">
+        <label class="attach-file-btn">
+          <i class="fas fa-folder-open"></i> Choose File
+          <input type="file" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" style="display:none" required>
+        </label>
+        <input type="text" name="description" class="form-control" placeholder="e.g. Receipt from AgroDealer, Quotation" maxlength="200" style="flex:1;">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Attach</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-dollar-sign"></i> Financial Management</h1>
+        <div class="page-subtitle">Track income, expenses, and farm profitability</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="openModal('addExpenseModal')">
+            <i class="fas fa-minus-circle"></i> Add Expense
+        </button>
+        <button class="btn btn-primary" onclick="openModal('addIncomeModal')">
+            <i class="fas fa-plus-circle"></i> Add Income
+        </button>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-arrow-up"></i></div>
+        <div>
+            <div class="stat-value profit-positive">{{ "%.2f"|format(summary.get('total_income', 0)) }}</div>
+            <div class="stat-label">Total Income</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon danger"><i class="fas fa-arrow-down"></i></div>
+        <div>
+            <div class="stat-value profit-negative">{{ "%.2f"|format(summary.get('total_expenses', 0)) }}</div>
+            <div class="stat-label">Total Expenses</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        {% set profit = summary.get('net_profit', 0) %}
+        <div class="stat-icon {{ '' if profit >= 0 else 'danger' }}"><i class="fas fa-chart-line"></i></div>
+        <div>
+            <div class="stat-value {{ 'profit-positive' if profit >= 0 else 'profit-negative' }}">{{ "%.2f"|format(profit) }}</div>
+            <div class="stat-label">Net Profit / Loss</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon info"><i class="fas fa-calendar-alt"></i></div>
+        <div>
+            <div class="stat-value">{{ "%.2f"|format(summary.get('month_income', 0)) }}</div>
+            <div class="stat-label">This Month Income</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon warning"><i class="fas fa-calendar-times"></i></div>
+        <div>
+            <div class="stat-value">{{ "%.2f"|format(summary.get('month_expenses', 0)) }}</div>
+            <div class="stat-label">This Month Expenses</div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-chart-pie"></i> Expenses by Category</span></div>
+        {% if summary.get('expenses_by_category') %}
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Category</th><th>Total</th></tr></thead>
+            <tbody>
+            {% for cat in summary.expenses_by_category %}
+            <tr><td>{{ cat.category }}</td><td><strong>{{ "%.2f"|format(cat.total) }}</strong></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-chart-pie"></i><p>No expense data yet</p></div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fas fa-info-circle"></i> Financial Overview</span></div>
+        <div style="padding:8px 0;">
+            {% set profit = summary.get('net_profit', 0) %}
+            <div style="text-align:center;padding:20px;">
+                <div style="font-size:14px;color:var(--text-muted);margin-bottom:8px;">Overall Farm P&L</div>
+                <div style="font-size:36px;font-weight:800;{{ 'color:var(--primary)' if profit >= 0 else 'color:var(--danger)' }}">
+                    {{ "%.2f"|format(profit|abs) }}
+                </div>
+                <div style="font-size:14px;margin-top:4px;{{ 'color:var(--primary)' if profit >= 0 else 'color:var(--danger)' }}">
+                    {{ 'Profit' if profit >= 0 else 'Loss' }}
+                </div>
+            </div>
+            {% if summary.get('total_income', 0) > 0 %}
+            <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-top:8px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+                    <span style="color:var(--text-muted);">Profit Margin</span>
+                    <strong>{{ "%.1f"|format((summary.get('net_profit', 0) / summary.get('total_income', 1)) * 100) }}%</strong>
+                </div>
+                <div style="background:var(--border);border-radius:4px;height:6px;">
+                    {% set margin = [((summary.get('net_profit', 0) / summary.get('total_income', 1)) * 100), 100] | min %}
+                    <div style="background:{{ 'var(--primary)' if margin >= 0 else 'var(--danger)' }};height:6px;border-radius:4px;width:{{ [margin|abs, 100]|min }}%;"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Expenses Table -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-receipt"></i> Expenses ({{ expenses|length }})</span>
+        <button class="btn btn-primary btn-sm" onclick="openModal('addExpenseModal')"><i class="fas fa-plus"></i> Add</button>
+    </div>
+    {% if expenses %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr><th>Date</th><th>Category</th><th>Description</th><th>Field</th><th>Amount</th><th>Vendor</th><th>Ref</th><th><i class="fas fa-paperclip" title="Attachments"></i></th><th>Del</th></tr>
+        </thead>
+        <tbody>
+        {% for e in expenses %}
+        {% set e_atts = attachments.get(('expense', e.id), []) %}
+        <tr>
+            <td>{{ e.expense_date.strftime('%d %b %Y') if e.expense_date else '—' }}</td>
+            <td><span class="badge badge-warning">{{ e.category }}</span></td>
+            <td>{{ e.description }}</td>
+            <td>{{ e.field_name or '—' }}</td>
+            <td><strong>{{ "%.2f"|format(e.amount) }}</strong></td>
+            <td>{{ e.vendor or '—' }}</td>
+            <td>{{ e.receipt_ref or '—' }}</td>
+            <td>
+                <button class="btn btn-sm btn-outline attach-btn" onclick="openAttach('expense', {{ e.id }}, '{{ e.description[:30] }}')" title="Receipts & Docs">
+                    <i class="fas fa-paperclip"></i>{% if e_atts %}<span class="attach-cnt">{{ e_atts|length }}</span>{% endif %}
+                </button>
+                <template id="attach-expense-{{ e.id }}">
+                    {{ attach_panel('expense', e.id, e_atts) }}
+                </template>
+            </td>
+            <td>
+                {% if session.get('role') in ['owner','manager'] %}
+                <form method="POST" action="{{ url_for('delete_expense', expense_id=e.id) }}" style="display:inline;" onsubmit="return confirm('Delete this expense?')">
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-receipt"></i><p>No expenses recorded yet</p></div>
+    {% endif %}
+</div>
+
+<!-- Income Table -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-hand-holding-usd"></i> Income Records ({{ income|length }})</span>
+        <button class="btn btn-primary btn-sm" onclick="openModal('addIncomeModal')"><i class="fas fa-plus"></i> Add</button>
+    </div>
+    {% if income %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr><th>Date</th><th>Source</th><th>Product</th><th>Qty</th><th>Unit Price</th><th>Amount</th><th>Buyer</th><th><i class="fas fa-paperclip" title="Attachments"></i></th><th>Del</th></tr>
+        </thead>
+        <tbody>
+        {% for i in income %}
+        {% set i_atts = attachments.get(('income', i.id), []) %}
+        <tr>
+            <td>{{ i.income_date.strftime('%d %b %Y') if i.income_date else '—' }}</td>
+            <td><span class="badge badge-success">{{ i.source }}</span></td>
+            <td>{{ i.product or '—' }}</td>
+            <td>{{ i.quantity or '—' }} {{ i.unit or '' }}</td>
+            <td>{{ "%.2f"|format(i.unit_price) if i.unit_price else '—' }}</td>
+            <td><strong class="profit-positive">{{ "%.2f"|format(i.amount) }}</strong></td>
+            <td>{{ i.buyer or '—' }}</td>
+            <td>
+                <button class="btn btn-sm btn-outline attach-btn" onclick="openAttach('income', {{ i.id }}, '{{ i.source }} – {{ i.product or '' }}')" title="Receipts & Quotations">
+                    <i class="fas fa-paperclip"></i>{% if i_atts %}<span class="attach-cnt">{{ i_atts|length }}</span>{% endif %}
+                </button>
+                <template id="attach-income-{{ i.id }}">
+                    {{ attach_panel('income', i.id, i_atts) }}
+                </template>
+            </td>
+            <td>
+                {% if session.get('role') in ['owner','manager'] %}
+                <form method="POST" action="{{ url_for('delete_income', income_id=i.id) }}" style="display:inline;" onsubmit="return confirm('Delete this record?')">
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-hand-holding-usd"></i><p>No income records yet</p></div>
+    {% endif %}
+</div>
+
+<!-- Add Expense Modal -->
+<div class="modal-overlay" id="addExpenseModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-minus-circle"></i> Record Expense</span>
+            <button class="modal-close" onclick="closeModal('addExpenseModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_expense') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Category *</label>
+                        <select name="category" required>
+                            <option value="">Select...</option>
+                            <option value="Labor">Labor / Wages</option>
+                            <option value="Seeds">Seeds / Planting Material</option>
+                            <option value="Chemicals">Chemicals / Pesticides</option>
+                            <option value="Fertilizers">Fertilizers</option>
+                            <option value="Fuel">Fuel / Energy</option>
+                            <option value="Maintenance">Equipment Maintenance</option>
+                            <option value="Feed">Animal Feed</option>
+                            <option value="Veterinary">Veterinary / Health</option>
+                            <option value="Transport">Transport / Logistics</option>
+                            <option value="Equipment">Equipment Purchase</option>
+                            <option value="Infrastructure">Infrastructure</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" name="expense_date" required value="{{ today }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description *</label>
+                    <input type="text" name="description" placeholder="e.g. NPK fertilizer for north block" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount *</label>
+                        <input type="number" step="0.01" name="amount" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Field (Optional)</label>
+                        <select name="field_id">
+                            <option value="">General / All Farm</option>
+                            {% for f in fields %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Vendor / Supplier</label>
+                        <input type="text" name="vendor" placeholder="e.g. AgroDealer Ltd">
+                    </div>
+                    <div class="form-group">
+                        <label>Receipt / Ref No.</label>
+                        <input type="text" name="receipt_ref" placeholder="e.g. REC-001">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional details..."></textarea>
+                </div>
+                <p class="setting-hint"><i class="fas fa-info-circle"></i> After saving, click the 📎 button on the record to attach receipts or documents.</p>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Save Expense
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Income Modal -->
+<div class="modal-overlay" id="addIncomeModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-plus-circle"></i> Record Income</span>
+            <button class="modal-close" onclick="closeModal('addIncomeModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_income') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Source *</label>
+                        <select name="source" required>
+                            <option value="">Select...</option>
+                            <option value="Crop Sale">Crop Sale</option>
+                            <option value="Livestock Sale">Livestock Sale</option>
+                            <option value="Milk Sale">Milk Sale</option>
+                            <option value="Egg Sale">Egg Sale</option>
+                            <option value="Land Lease">Land Lease</option>
+                            <option value="Grant / Subsidy">Grant / Subsidy</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" name="income_date" required value="{{ today }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Product / Commodity</label>
+                    <input type="text" name="product" placeholder="e.g. Maize, Milk, Beef cattle">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity Sold</label>
+                        <input type="number" step="0.01" name="quantity" placeholder="e.g. 500">
+                    </div>
+                    <div class="form-group">
+                        <label>Unit</label>
+                        <select name="unit">
+                            <option value="">Select...</option>
+                            <option value="kg">kg</option><option value="tonnes">Tonnes</option>
+                            <option value="liters">Liters</option><option value="bags">Bags</option>
+                            <option value="heads">Heads</option><option value="units">Units</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Unit Price</label>
+                        <input type="number" step="0.01" name="unit_price" placeholder="Price per unit">
+                    </div>
+                    <div class="form-group">
+                        <label>Total Amount *</label>
+                        <input type="number" step="0.01" name="amount" placeholder="0.00" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Buyer / Customer</label>
+                    <input type="text" name="buyer" placeholder="e.g. Market, Processor name">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional details..."></textarea>
+                </div>
+                <p class="setting-hint"><i class="fas fa-info-circle"></i> After saving, click the 📎 button on the record to attach quotations or documents.</p>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Save Income
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+</script>
+{% endblock %}

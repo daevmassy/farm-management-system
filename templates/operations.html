@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Operations - Tomato Farm Management System{% endblock %}
+
+{% block content %}
+<h2>⚙️ Farm Operations Management</h2>
+
+{% if session.get('user_type') == 'admin' %}
+<form method="POST" action="/operations/add">
+    <div class="form-row">
+        <div class="form-group">
+            <label for="operation_type">Operation Type *</label>
+            <select id="operation_type" name="operation_type" required>
+                <option value="">Select Operation</option>
+                <option value="Spraying">Spraying/Pesticide Application</option>
+                <option value="Weeding">Weeding</option>
+                <option value="Irrigation">Irrigation</option>
+                <option value="Fertilizing">Fertilizing</option>
+                <option value="Pruning">Pruning</option>
+                <option value="Mulching">Mulching</option>
+                <option value="Staking">Staking</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="operation_date">Operation Date *</label>
+            <input type="date" id="operation_date" name="operation_date" required>
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <div class="form-group">
+            <label for="field_location">Field Location *</label>
+            <select id="field_location" name="field_location" required>
+                <option value="">Select Field</option>
+                <option value="Field A">Field A</option>
+                <option value="Field B">Field B</option>
+                <option value="Field C">Field C</option>
+                <option value="Field D">Field D</option>
+                <option value="Field E">Field E</option>
+                <option value="Nursery 1">Nursery 1</option>
+                <option value="Nursery 2">Nursery 2</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="performed_by">Performed By *</label>
+            <select id="performed_by" name="performed_by" required>
+                <option value="">Select Employee</option>
+                <option value="Employee 1">Employee 1</option>
+                <option value="Employee 2">Employee 2</option>
+                <option value="Employee 3">Employee 3</option>
+                <option value="Employee 4">Employee 4</option>
+                <option value="Employee 5">Employee 5</option>
+                <option value="Employee 6">Employee 6</option>
+                <option value="Employee 7">Employee 7</option>
+                <option value="Employee 8">Employee 8</option>
+                <option value="Employee 9">Employee 9</option>
+                <option value="Employee 10">Employee 10</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <div class="form-group">
+            <label for="cost">Cost ($)</label>
+            <input type="number" step="0.01" id="cost" name="cost" placeholder="0.00">
+        </div>
+        <div class="form-group">
+            <label for="description">Description *</label>
+            <textarea id="description" name="description" required placeholder="Describe the operation..."></textarea>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="notes">Additional Notes</label>
+        <textarea id="notes" name="notes" placeholder="Any additional information..."></textarea>
+    </div>
+    
+    <button type="submit" class="btn">Record Operation</button>
+</form>
+{% else %}
+<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin-bottom: 20px;">
+    <p><strong>ℹ️ Employee Access:</strong> You are viewing in read-only mode. Admin access is required to add or modify operations records.</p>
+</div>
+{% endif %}
+
+<h2 style="margin-top: 40px;">📋 Operations History</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Location</th>
+            <th>Description</th>
+            <th>Cost</th>
+            <th>Performed By</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for op in operations %}
+        <tr>
+            <td>{{ op.operation_date }}</td>
+            <td>{{ op.operation_type }}</td>
+            <td>{{ op.field_location or 'N/A' }}</td>
+            <td>{{ op.description }}</td>
+            <td>${{ op.cost }}</td>
+            <td>{{ op.performed_by or 'N/A' }}</td>
+            <td>
+                {% if session.get('user_type') == 'admin' %}
+                <form method="POST" action="/operations/delete/{{ op.id }}" style="display: inline;">
+                    <button type="submit" class="btn-delete" onclick="return confirm('Delete this record?')">Delete</button>
+                </form>
+                {% else %}
+                <span style="color: #999;">View Only</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="7" style="text-align: center;">No operations recorded yet</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Farm Management System{% endblock %}
+{% block content %}
+
+<div class="welcome-banner">
+    <div>
+        <h2>Welcome back, {{ session.get('username') }}!</h2>
+        <p>{{ session.get('farm_name') }} &mdash; {{ session.get('role', '').replace('_',' ').title() }} &mdash; {{ now if now else '' }}</p>
+    </div>
+    <i class="fas fa-tractor"></i>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-layer-group"></i></div>
+        <div><div class="stat-value">{{ stats.get('fields', 0) }}</div><div class="stat-label">Active Fields</div></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-horse"></i></div>
+        <div><div class="stat-value">{{ stats.get('livestock', 0) }}</div><div class="stat-label">Livestock Groups</div></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon warning"><i class="fas fa-tasks"></i></div>
+        <div><div class="stat-value">{{ stats.get('pending_tasks', 0) }}</div><div class="stat-label">Pending Tasks</div></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon info"><i class="fas fa-tractor"></i></div>
+        <div><div class="stat-value">{{ stats.get('equipment', 0) }}</div><div class="stat-label">Equipment Units</div></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-arrow-up"></i></div>
+        <div><div class="stat-value">{{ "%.0f"|format(stats.get('monthly_income', 0)) }}</div><div class="stat-label">Income This Month</div></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon danger"><i class="fas fa-arrow-down"></i></div>
+        <div><div class="stat-value">{{ "%.0f"|format(stats.get('monthly_expenses', 0)) }}</div><div class="stat-label">Expenses This Month</div></div>
+    </div>
+    <div class="stat-card">
+        {% set profit = stats.get('monthly_profit', 0) %}
+        <div class="stat-icon {{ '' if profit >= 0 else 'danger' }}"><i class="fas fa-chart-line"></i></div>
+        <div>
+            <div class="stat-value {{ 'profit-positive' if profit >= 0 else 'profit-negative' }}">{{ "%.0f"|format(profit) }}</div>
+            <div class="stat-label">Net Profit (Month)</div>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <!-- Recent Field Activities -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-history"></i> Recent Field Activities</span>
+            <a href="{{ url_for('fields') }}" class="btn btn-secondary btn-sm">View All</a>
+        </div>
+        {% if recent_activities %}
+            {% for a in recent_activities %}
+            <div class="activity-item">
+                <div class="activity-dot"></div>
+                <div style="flex:1">
+                    <div style="font-size:13px;font-weight:600;">
+                        <span class="activity-{{ a.activity_type }}">{{ a.activity_type | title }}</span>
+                        — {{ a.field_name }}
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);">
+                        {{ a.crop_name or '' }} {{ a.activity_date.strftime('%d %b %Y') if a.activity_date else '' }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state"><i class="fas fa-leaf"></i><p>No field activities logged yet</p></div>
+        {% endif %}
+    </div>
+
+    <!-- Pending Tasks -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-clipboard-list"></i> Upcoming Tasks</span>
+            <a href="{{ url_for('tasks') }}" class="btn btn-secondary btn-sm">View All</a>
+        </div>
+        {% if pending_tasks %}
+            {% for t in pending_tasks %}
+            <div class="task-item">
+                <div style="flex:1">
+                    <div style="font-size:13px;font-weight:600;">{{ t.title }}</div>
+                    <div style="font-size:12px;color:var(--text-muted);">
+                        {% if t.due_date %}Due {{ t.due_date.strftime('%d %b') }}{% endif %}
+                        {% if t.assignee_name %}&bull; {{ t.assignee_name }}{% endif %}
+                    </div>
+                </div>
+                <span class="badge badge-{{ 'danger' if t.priority == 'high' else 'warning' if t.priority == 'medium' else 'muted' }}">{{ t.priority }}</span>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state"><i class="fas fa-check-double"></i><p>No pending tasks</p></div>
+        {% endif %}
+    </div>
+
+    <!-- Low Stock Alerts -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i> Low Stock Alerts</span>
+            <a href="{{ url_for('inventory') }}" class="btn btn-secondary btn-sm">Inventory</a>
+        </div>
+        {% if low_stock %}
+            <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Item</th><th>Qty</th><th>Min</th><th>Unit</th></tr></thead>
+                <tbody>
+                {% for item in low_stock %}
+                <tr>
+                    <td>{{ item.item_name }}</td>
+                    <td class="low-stock">{{ item.quantity }}</td>
+                    <td>{{ item.min_quantity }}</td>
+                    <td>{{ item.unit or '' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-boxes"></i><p>All stock levels are adequate</p></div>
+        {% endif %}
+    </div>
+
+    <!-- Equipment Maintenance Due -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-wrench" style="color:var(--warning)"></i> Maintenance Due Soon</span>
+            <a href="{{ url_for('equipment') }}" class="btn btn-secondary btn-sm">Equipment</a>
+        </div>
+        {% if upcoming_maintenance %}
+            {% for m in upcoming_maintenance %}
+            <div class="activity-item">
+                <div class="activity-dot" style="background:var(--warning);"></div>
+                <div style="flex:1">
+                    <div style="font-size:13px;font-weight:600;">{{ m.name }}</div>
+                    <div style="font-size:12px;color:var(--text-muted);">
+                        {{ m.maintenance_type }} &mdash; Due {{ m.next_due_date.strftime('%d %b %Y') if m.next_due_date else 'TBD' }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state"><i class="fas fa-tractor"></i><p>No maintenance due in next 30 days</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

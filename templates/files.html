@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Files & Documents – FarmMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-folder-open"></i> Files & Documents</h1>
+        <p class="page-sub">Upload and manage farm documents, images, and reports</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('uploadModal')">
+        <i class="fas fa-upload"></i> Upload File
+    </button>
+</div>
+
+<!-- Category Filter Tabs -->
+<div class="filter-tabs">
+    <a href="{{ url_for('files') }}" class="filter-tab {{ 'active' if not category_filter }}">
+        <i class="fas fa-th-large"></i> All Files
+    </a>
+    <a href="{{ url_for('files', category='image') }}" class="filter-tab {{ 'active' if category_filter == 'image' }}">
+        <i class="fas fa-image"></i> Images
+    </a>
+    <a href="{{ url_for('files', category='pdf') }}" class="filter-tab {{ 'active' if category_filter == 'pdf' }}">
+        <i class="fas fa-file-pdf"></i> PDFs
+    </a>
+    <a href="{{ url_for('files', category='document') }}" class="filter-tab {{ 'active' if category_filter == 'document' }}">
+        <i class="fas fa-file-word"></i> Documents
+    </a>
+    <a href="{{ url_for('files', category='spreadsheet') }}" class="filter-tab {{ 'active' if category_filter == 'spreadsheet' }}">
+        <i class="fas fa-file-excel"></i> Spreadsheets
+    </a>
+    <a href="{{ url_for('files', category='other') }}" class="filter-tab {{ 'active' if category_filter == 'other' }}">
+        <i class="fas fa-file"></i> Other
+    </a>
+</div>
+
+{% if uploads %}
+<!-- Image Gallery (if images in view) -->
+{% set images = uploads | selectattr('category', 'equalto', 'image') | list %}
+{% if images and (not category_filter or category_filter == 'image') %}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-images"></i> Images</h3>
+        <span class="badge">{{ images | length }}</span>
+    </div>
+    <div class="image-gallery">
+        {% for img in images %}
+        <div class="gallery-item">
+            <a href="{{ url_for('view_file', file_id=img.id) }}" target="_blank" class="gallery-link">
+                <img src="{{ url_for('static', filename='uploads/' ~ img.farm_id ~ '/' ~ img.stored_filename) }}"
+                     alt="{{ img.original_filename }}" class="gallery-img" loading="lazy"
+                     onerror="this.src=''; this.parentElement.innerHTML='<div class=\'gallery-placeholder\'><i class=\'fas fa-image\'></i></div>'">
+            </a>
+            <div class="gallery-info">
+                <span class="gallery-name" title="{{ img.original_filename }}">{{ img.original_filename }}</span>
+                <span class="gallery-meta">{{ img.uploaded_at.strftime('%d %b %Y') if img.uploaded_at else '' }}</span>
+            </div>
+            <div class="gallery-actions">
+                <a href="{{ url_for('download_file', file_id=img.id) }}" class="btn btn-sm btn-outline" title="Download">
+                    <i class="fas fa-download"></i>
+                </a>
+                <form method="POST" action="{{ url_for('delete_file', file_id=img.id) }}" onsubmit="return confirm('Delete this file?');" style="display:inline">
+                    <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Non-image files table -->
+{% set docs = uploads | rejectattr('category', 'equalto', 'image') | list %}
+{% if docs or category_filter %}
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-file-alt"></i> Documents & Files</h3>
+        <span class="badge">{{ (docs | length) if not category_filter else (uploads | length) }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Description</th>
+                    <th>Uploaded By</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set show_list = uploads if category_filter else docs %}
+                {% for f in show_list %}
+                <tr>
+                    <td>
+                        <div class="file-name-cell">
+                            <i class="fas {{ 'fa-file-pdf text-danger' if f.category == 'pdf'
+                                           else 'fa-file-word text-info' if f.category == 'document'
+                                           else 'fa-file-excel text-success' if f.category == 'spreadsheet'
+                                           else 'fa-file' }}"></i>
+                            <span title="{{ f.original_filename }}">{{ f.original_filename }}</span>
+                        </div>
+                    </td>
+                    <td><span class="badge-type badge-{{ f.category }}">{{ f.file_type | upper if f.file_type else '—' }}</span></td>
+                    <td>{{ (f.file_size / 1024) | round(1) }} KB</td>
+                    <td>{{ f.description or '—' }}</td>
+                    <td>{{ f.uploader or '—' }}</td>
+                    <td>{{ f.uploaded_at.strftime('%d %b %Y') if f.uploaded_at else '—' }}</td>
+                    <td>
+                        <div class="action-btns">
+                            <a href="{{ url_for('view_file', file_id=f.id) }}" target="_blank"
+                               class="btn btn-sm btn-outline" title="View">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="{{ url_for('download_file', file_id=f.id) }}"
+                               class="btn btn-sm btn-outline" title="Download">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('delete_file', file_id=f.id) }}"
+                                  onsubmit="return confirm('Delete this file?');" style="display:inline">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not show_list %}
+                <tr><td colspan="7" class="empty-row">No files in this category</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <i class="fas fa-folder-open"></i>
+    <h3>No files yet</h3>
+    <p>Upload your first file — farm photos, receipts, reports, or any document.</p>
+    <button class="btn btn-primary" onclick="openModal('uploadModal')">
+        <i class="fas fa-upload"></i> Upload File
+    </button>
+</div>
+{% endif %}
+
+<!-- Upload Modal -->
+<div class="modal-overlay" id="uploadModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-upload"></i> Upload File</h3>
+            <button class="modal-close" onclick="closeModal('uploadModal')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('upload_file') }}" enctype="multipart/form-data">
+            <div class="modal-body">
+                <div class="upload-drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Click to browse or drag & drop</p>
+                    <small>Images, PDF, Word, Excel, CSV, ZIP, TXT — max 16 MB</small>
+                    <div id="filePreview" class="file-preview-area" style="display:none"></div>
+                </div>
+                <input type="file" id="fileInput" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.odt,.ods,.zip" style="display:none" onchange="previewFile(this)" required>
+
+                <div class="form-group" style="margin-top:1rem">
+                    <label class="form-label">Description <span class="optional">(optional)</span></label>
+                    <input type="text" name="description" class="form-control"
+                           placeholder="e.g. Field 3 harvest photo, Q3 expense receipt…" maxlength="300">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal('uploadModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+document.getElementById('uploadModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal('uploadModal');
+});
+
+function previewFile(input) {
+    const preview = document.getElementById('filePreview');
+    const dropZone = document.getElementById('dropZone');
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+    const isImage = file.type.startsWith('image/');
+
+    preview.style.display = 'block';
+    if (isImage) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            preview.innerHTML = `<img src="${e.target.result}" class="preview-img"><div class="preview-info"><strong>${file.name}</strong><br><small>${sizeMB} MB</small></div>`;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        const icons = { pdf: 'fa-file-pdf text-danger', doc: 'fa-file-word text-info', docx: 'fa-file-word text-info', xls: 'fa-file-excel text-success', xlsx: 'fa-file-excel text-success', csv: 'fa-file-csv text-success', txt: 'fa-file-alt', zip: 'fa-file-archive' };
+        const ext = file.name.split('.').pop().toLowerCase();
+        const icon = icons[ext] || 'fa-file';
+        preview.innerHTML = `<div class="preview-doc"><i class="fas ${icon}"></i><div class="preview-info"><strong>${file.name}</strong><br><small>${sizeMB} MB</small></div></div>`;
+    }
+}
+
+// Drag and drop support
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const fileInput = document.getElementById('fileInput');
+    fileInput.files = e.dataTransfer.files;
+    previewFile(fileInput);
+});
+</script>
+{% endblock %}

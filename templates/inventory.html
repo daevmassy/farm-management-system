@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Inventory - Farm Management System{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-boxes"></i> Inventory Management</h1>
+        <div class="page-subtitle">Track seeds, chemicals, spare parts, tools, and harvested produce</div>
+    </div>
+    {% if session.get('role') in ['owner','manager'] %}
+    <button class="btn btn-primary" onclick="openModal('addItemModal')">
+        <i class="fas fa-plus"></i> Add Item
+    </button>
+    {% endif %}
+</div>
+
+<!-- Category Filters -->
+<div class="filters-bar">
+    <a href="{{ url_for('inventory') }}" class="btn {{ 'btn-primary' if not category_filter else 'btn-secondary' }} btn-sm">All</a>
+    {% for cat in ['Seeds','Chemicals','Fertilizers','Feed','Spare Parts','Harvested Crops','Tools','Other'] %}
+    <a href="{{ url_for('inventory', category=cat) }}" class="btn {{ 'btn-primary' if category_filter == cat else 'btn-secondary' }} btn-sm">{{ cat }}</a>
+    {% endfor %}
+</div>
+
+<div class="card">
+    {% if items %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Item Name</th><th>Category</th><th>Quantity</th><th>Min Qty</th>
+                <th>Unit</th><th>Cost/Unit</th><th>Location</th><th>Expiry</th><th>Status</th>
+                {% if session.get('role') in ['owner','manager'] %}<th>Actions</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in items %}
+        {% set is_low = item.quantity <= item.min_quantity %}
+        <tr>
+            <td><strong>{{ item.item_name }}</strong>{% if item.notes %}<div style="font-size:11px;color:var(--text-muted);">{{ item.notes[:40] }}</div>{% endif %}</td>
+            <td><span class="badge badge-info">{{ item.category }}</span></td>
+            <td class="{{ 'low-stock' if is_low else '' }}">{{ item.quantity }}</td>
+            <td>{{ item.min_quantity }}</td>
+            <td>{{ item.unit or '—' }}</td>
+            <td>{{ "%.2f"|format(item.cost_per_unit) if item.cost_per_unit else '—' }}</td>
+            <td>{{ item.location or '—' }}</td>
+            <td>
+                {% if item.expiry_date %}
+                <span style="color:var(--warning);">{{ item.expiry_date.strftime('%d %b %Y') }}</span>
+                {% else %}—{% endif %}
+            </td>
+            <td>
+                {% if is_low %}
+                <span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>
+                {% else %}
+                <span class="badge badge-success">OK</span>
+                {% endif %}
+            </td>
+            {% if session.get('role') in ['owner','manager'] %}
+            <td>
+                <div style="display:flex;gap:4px;">
+                    <button class="btn btn-secondary btn-sm" onclick="openUpdateModal({{ item.id }}, '{{ item.item_name }}', {{ item.quantity }})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <form method="POST" action="{{ url_for('delete_inventory', item_id=item.id) }}" style="display:inline;" onsubmit="return confirm('Delete this item?')">
+                        <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                    </form>
+                </div>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-boxes"></i><p>No inventory items found{% if category_filter %} in {{ category_filter }}{% endif %}. {% if session.get('role') in ['owner','manager'] %}Add your first item!{% endif %}</p></div>
+    {% endif %}
+</div>
+
+<!-- Add Item Modal -->
+{% if session.get('role') in ['owner','manager'] %}
+<div class="modal-overlay" id="addItemModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-plus"></i> Add Inventory Item</span>
+            <button class="modal-close" onclick="closeModal('addItemModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_inventory') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Item Name *</label>
+                        <input type="text" name="item_name" placeholder="e.g. NPK Fertilizer, Roundup" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category *</label>
+                        <select name="category" required>
+                            <option value="">Select...</option>
+                            <option value="Seeds">Seeds</option>
+                            <option value="Chemicals">Chemicals / Pesticides</option>
+                            <option value="Fertilizers">Fertilizers</option>
+                            <option value="Feed">Animal Feed</option>
+                            <option value="Spare Parts">Spare Parts</option>
+                            <option value="Harvested Crops">Harvested Crops</option>
+                            <option value="Tools">Tools</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity *</label>
+                        <input type="number" step="0.01" name="quantity" placeholder="e.g. 100" required value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Unit</label>
+                        <select name="unit">
+                            <option value="">Select...</option>
+                            <option value="kg">kg</option><option value="liters">Liters</option>
+                            <option value="bags">Bags</option><option value="units">Units</option>
+                            <option value="tonnes">Tonnes</option><option value="pieces">Pieces</option>
+                            <option value="packets">Packets</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Min. Quantity Alert</label>
+                        <input type="number" step="0.01" name="min_quantity" placeholder="Alert when below this" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Cost Per Unit</label>
+                        <input type="number" step="0.01" name="cost_per_unit" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Storage Location</label>
+                        <input type="text" name="location" placeholder="e.g. Main Store, Warehouse B">
+                    </div>
+                    <div class="form-group">
+                        <label>Expiry Date</label>
+                        <input type="date" name="expiry_date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional details, batch number, etc."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Add to Inventory
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Update Quantity Modal -->
+<div class="modal-overlay" id="updateItemModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-edit"></i> Update Quantity</span>
+            <button class="modal-close" onclick="closeModal('updateItemModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="updateItemForm" method="POST">
+                <div class="form-group" style="margin-bottom:14px;">
+                    <div id="updateItemName" style="font-weight:600;font-size:14px;color:var(--primary);"></div>
+                </div>
+                <div class="form-group">
+                    <label>New Quantity *</label>
+                    <input type="number" step="0.01" name="quantity" id="updateQtyInput" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Update Quantity
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openUpdateModal(itemId, itemName, currentQty) {
+    document.getElementById('updateItemForm').action = '/inventory/update/' + itemId;
+    document.getElementById('updateItemName').textContent = 'Item: ' + itemName;
+    document.getElementById('updateQtyInput').value = currentQty;
+    openModal('updateItemModal');
+}
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Farm Management System{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+    {% if session.get('user_id') %}
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                {% if session.get('farm_logo') %}
+                    <img src="{{ url_for('static', filename=session.get('farm_logo')) }}"
+                         alt="Farm Logo" class="brand-logo">
+                {% else %}
+                    <i class="fas fa-seedling brand-icon"></i>
+                {% endif %}
+                <div class="brand-text">
+                    <span class="brand-title">FarmMS</span>
+                    <span class="brand-sub">{{ session.get('farm_name', 'My Farm') }}</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('index') }}" class="nav-item {{ 'active' if request.path == '/' }}">
+                    <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+                </a>
+                <div class="nav-section-label">Farming</div>
+                <a href="{{ url_for('fields') }}" class="nav-item {{ 'active' if request.path.startswith('/fields') or request.path.startswith('/activities') }}">
+                    <i class="fas fa-layer-group"></i><span>Fields & Crops</span>
+                </a>
+                <a href="{{ url_for('livestock') }}" class="nav-item {{ 'active' if request.path.startswith('/livestock') }}">
+                    <i class="fas fa-horse"></i><span>Livestock</span>
+                </a>
+                <div class="nav-section-label">Operations</div>
+                <a href="{{ url_for('tasks') }}" class="nav-item {{ 'active' if request.path.startswith('/tasks') }}">
+                    <i class="fas fa-tasks"></i><span>Tasks & Schedule</span>
+                </a>
+                <a href="{{ url_for('equipment') }}" class="nav-item {{ 'active' if request.path.startswith('/equipment') }}">
+                    <i class="fas fa-tractor"></i><span>Equipment</span>
+                </a>
+                <a href="{{ url_for('inventory') }}" class="nav-item {{ 'active' if request.path.startswith('/inventory') }}">
+                    <i class="fas fa-boxes"></i><span>Inventory</span>
+                </a>
+                <div class="nav-section-label">Business</div>
+                <a href="{{ url_for('finance') }}" class="nav-item {{ 'active' if request.path.startswith('/finance') }}">
+                    <i class="fas fa-dollar-sign"></i><span>Finance</span>
+                </a>
+                <a href="{{ url_for('reports') }}" class="nav-item {{ 'active' if request.path.startswith('/reports') }}">
+                    <i class="fas fa-chart-bar"></i><span>Reports</span>
+                </a>
+                {% if session.get('role') in ['owner', 'manager'] %}
+                <a href="{{ url_for('team') }}" class="nav-item {{ 'active' if request.path.startswith('/team') }}">
+                    <i class="fas fa-users"></i><span>Team</span>
+                </a>
+                {% endif %}
+                <div class="nav-section-label">Storage</div>
+                <a href="{{ url_for('files') }}" class="nav-item {{ 'active' if request.path.startswith('/files') }}">
+                    <i class="fas fa-folder-open"></i><span>Files & Docs</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('profile') }}" class="user-badge user-badge-link" title="Profile & Settings">
+                    {% if session.get('avatar_path') %}
+                        <img src="{{ url_for('static', filename=session.get('avatar_path')) }}"
+                             alt="avatar" class="user-avatar-img">
+                    {% else %}
+                        <div class="user-avatar">{{ session.get('username', 'U')[0].upper() }}</div>
+                    {% endif %}
+                    <div class="user-info">
+                        <span class="user-name">{{ session.get('username') }}</span>
+                        <span class="user-role">{{ session.get('role', '').replace('_', ' ').title() }}</span>
+                    </div>
+                </a>
+                <div class="sidebar-actions">
+                    <label class="theme-switch" title="Toggle theme">
+                        <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+                        <span class="slider"></span>
+                    </label>
+                    <a href="{{ url_for('logout') }}" class="logout-link" title="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile topbar -->
+        <div class="mobile-topbar">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <span class="mobile-title"><i class="fas fa-seedling"></i> FarmMS</span>
+            <a href="{{ url_for('logout') }}" class="mobile-logout"><i class="fas fa-sign-out-alt"></i></a>
+        </div>
+
+        <!-- Main content -->
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">
+                                <i class="fas {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-circle' }}"></i>
+                                {{ message }}
+                                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+    {% block auth_content %}{% endblock %}
+    {% endif %}
+
+    <!-- Shared Attachment Modal -->
+    <div class="modal-overlay" id="attachModal">
+        <div class="modal modal-wide">
+            <div class="modal-header">
+                <span class="modal-title" id="attachModalTitle"><i class="fas fa-paperclip"></i> Attachments</span>
+                <button class="modal-close" onclick="closeAttachModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="attachModalBody" style="max-height:70vh;overflow-y:auto;"></div>
+        </div>
+    </div>
+
+    <script>
+        function openAttach(type, id, title) {
+            const tmpl = document.getElementById('attach-' + type + '-' + id);
+            document.getElementById('attachModalTitle').innerHTML = '<i class="fas fa-paperclip"></i> ' + title;
+            document.getElementById('attachModalBody').innerHTML = tmpl
+                ? tmpl.innerHTML
+                : '<div class="attach-empty"><i class="fas fa-paperclip"></i><p>No attachments yet.</p></div>';
+            document.getElementById('attachModal').classList.add('open');
+        }
+        function closeAttachModal() {
+            document.getElementById('attachModal').classList.remove('open');
+        }
+        function toggleTheme() {
+            const isDark = document.body.classList.toggle('light-theme');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            if (localStorage.getItem('theme') === 'light') {
+                document.body.classList.add('light-theme');
+                const toggle = document.getElementById('themeToggle');
+                if (toggle) toggle.checked = true;
+            }
+            setTimeout(() => {
+                document.querySelectorAll('.alert').forEach(a => a.style.opacity = '0');
+            }, 5000);
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

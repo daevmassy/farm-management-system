@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Equipment - Farm Management System{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-tractor"></i> Equipment & Machinery</h1>
+        <div class="page-subtitle">Fleet tracking, maintenance scheduling, and service records</div>
+    </div>
+    {% if session.get('role') in ['owner','manager'] %}
+    <button class="btn btn-primary" onclick="openModal('addEquipModal')">
+        <i class="fas fa-plus"></i> Add Equipment
+    </button>
+    {% endif %}
+</div>
+
+<!-- Equipment Cards -->
+<div class="grid-3" style="margin-bottom:20px;">
+    {% for e in equipment %}
+    <div class="card" style="margin:0;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+            <div>
+                <div style="font-size:15px;font-weight:700;">{{ e.name }}</div>
+                <div style="font-size:12px;color:var(--text-muted);">
+                    {{ e.equipment_type or '' }}{% if e.make %} &bull; {{ e.make }}{% endif %}{% if e.model %} {{ e.model }}{% endif %}{% if e.year %} ({{ e.year }}){% endif %}
+                </div>
+            </div>
+            <span class="badge badge-{{ 'success' if e.status == 'operational' else 'danger' if e.status == 'broken' else 'warning' }}">{{ e.status }}</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
+            <div style="text-align:center;">
+                <div style="font-size:18px;font-weight:700;color:var(--info);">{{ e.usage_hours or 0 }}</div>
+                <div style="font-size:11px;color:var(--text-muted);">Usage Hrs</div>
+            </div>
+            {% if e.fuel_type %}
+            <div>
+                <div style="font-size:12px;color:var(--text-muted);"><i class="fas fa-gas-pump"></i> {{ e.fuel_type }}</div>
+            </div>
+            {% endif %}
+        </div>
+        {% if e.next_service_date %}
+        <div style="font-size:12px;margin-bottom:12px;padding:8px;background:var(--bg3);border-radius:6px;">
+            <i class="fas fa-wrench" style="color:var(--warning);"></i>
+            Next service: <strong>{{ e.next_service_date.strftime('%d %b %Y') if e.next_service_date else 'Not set' }}</strong>
+        </div>
+        {% endif %}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="openMaintenanceModal({{ e.id }}, '{{ e.name }}')">
+                <i class="fas fa-wrench"></i> Log Service
+            </button>
+            {% if session.get('role') in ['owner','manager'] %}
+            <form method="POST" action="{{ url_for('delete_equipment', equip_id=e.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ e.name }}?')">
+                <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card" style="margin:0;grid-column:1/-1;">
+        <div class="empty-state"><i class="fas fa-tractor"></i><p>No equipment added yet</p></div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Maintenance Records -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-tools"></i> Maintenance & Service Records</span>
+    </div>
+    {% if maintenance %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th><th>Equipment</th><th>Service Type</th><th>Description</th>
+                <th>Cost</th><th>Performed By</th><th>Next Due</th>
+                {% if session.get('role') in ['owner','manager'] %}<th>Del</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for m in maintenance %}
+        <tr>
+            <td>{{ m.maintenance_date.strftime('%d %b %Y') if m.maintenance_date else '—' }}</td>
+            <td><strong>{{ m.equipment_name }}</strong></td>
+            <td><span class="badge badge-info">{{ m.maintenance_type or '—' }}</span></td>
+            <td>{{ m.description or '—' }}</td>
+            <td>{{ "%.2f"|format(m.cost) if m.cost else '—' }}</td>
+            <td>{{ m.performed_by or '—' }}</td>
+            <td>
+                {% if m.next_due_date %}
+                <span style="color:var(--warning);">{{ m.next_due_date.strftime('%d %b %Y') }}</span>
+                {% else %}—{% endif %}
+            </td>
+            {% if session.get('role') in ['owner','manager'] %}
+            <td>
+                <form method="POST" action="{{ url_for('delete_maintenance', record_id=m.id) }}" style="display:inline;" onsubmit="return confirm('Delete this record?')">
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-tools"></i><p>No maintenance records yet</p></div>
+    {% endif %}
+</div>
+
+<!-- Add Equipment Modal -->
+{% if session.get('role') in ['owner','manager'] %}
+<div class="modal-overlay" id="addEquipModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-tractor"></i> Add Equipment</span>
+            <button class="modal-close" onclick="closeModal('addEquipModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_equipment') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Equipment Name *</label>
+                        <input type="text" name="name" placeholder="e.g. John Deere Tractor" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select name="equipment_type">
+                            <option value="">Select type...</option>
+                            <option>Tractor</option><option>Combine Harvester</option><option>Plough</option>
+                            <option>Sprayer</option><option>Irrigation Pump</option><option>Generator</option>
+                            <option>Vehicle</option><option>Trailer</option><option>Milking Machine</option><option>Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Make / Brand</label>
+                        <input type="text" name="make" placeholder="e.g. John Deere, Kubota">
+                    </div>
+                    <div class="form-group">
+                        <label>Model</label>
+                        <input type="text" name="model" placeholder="e.g. 5075E">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Year</label>
+                        <input type="number" name="year" placeholder="e.g. 2020" min="1950" max="2030">
+                    </div>
+                    <div class="form-group">
+                        <label>Usage Hours</label>
+                        <input type="number" step="0.1" name="usage_hours" placeholder="e.g. 1250" value="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Fuel Type</label>
+                        <select name="fuel_type">
+                            <option value="">Select...</option>
+                            <option>Diesel</option><option>Petrol</option><option>Electric</option><option>Hybrid</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status">
+                            <option value="operational">Operational</option>
+                            <option value="under_maintenance">Under Maintenance</option>
+                            <option value="broken">Broken / Down</option>
+                            <option value="retired">Retired</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Last Service Date</label>
+                        <input type="date" name="last_service_date">
+                    </div>
+                    <div class="form-group">
+                        <label>Next Service Due</label>
+                        <input type="date" name="next_service_date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional details, registration number, etc."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-plus"></i> Add Equipment
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Log Maintenance Modal -->
+<div class="modal-overlay" id="addMaintenanceModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-tools"></i> Log Maintenance / Service</span>
+            <button class="modal-close" onclick="closeModal('addMaintenanceModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_maintenance') }}">
+                <input type="hidden" name="equipment_id" id="maintenanceEquipId">
+                <div class="form-group" style="margin-bottom:14px;">
+                    <div id="maintenanceEquipName" style="font-weight:600;font-size:14px;color:var(--primary);"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Service Type *</label>
+                        <select name="maintenance_type" required>
+                            <option value="">Select...</option>
+                            <option value="Oil Change">Oil Change</option>
+                            <option value="Filter Replacement">Filter Replacement</option>
+                            <option value="Tyre Service">Tyre Service</option>
+                            <option value="Full Service">Full Service</option>
+                            <option value="Repair">Repair</option>
+                            <option value="Inspection">Inspection</option>
+                            <option value="Fueling">Fueling</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" name="maintenance_date" required value="{{ today }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" placeholder="e.g. Changed engine oil, replaced air filter">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cost</label>
+                        <input type="number" step="0.01" name="cost" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Performed By</label>
+                        <input type="text" name="performed_by" placeholder="Mechanic / technician name">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Next Service Due Date</label>
+                    <input type="date" name="next_due_date">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional details..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Save Record
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openMaintenanceModal(equipId, equipName) {
+    document.getElementById('maintenanceEquipId').value = equipId;
+    document.getElementById('maintenanceEquipName').textContent = 'Equipment: ' + equipName;
+    openModal('addMaintenanceModal');
+}
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+</script>
+{% endblock %}

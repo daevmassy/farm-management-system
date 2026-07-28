@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Register - Farm Management System{% endblock %}
+{% block auth_content %}
+<div class="auth-page">
+    <div class="auth-card" style="max-width:520px;">
+        <div class="auth-logo">
+            <i class="fas fa-seedling"></i>
+            <h1>Farm Management System</h1>
+            <p>Create your account and get started</p>
+        </div>
+        <div class="auth-tabs">
+            <a href="{{ url_for('login') }}" class="auth-tab">Sign In</a>
+            <a href="{{ url_for('register') }}" class="auth-tab active">Register</a>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}" style="margin-bottom:14px;">
+                    <i class="fas {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-circle' }}"></i>{{ message }}
+                </div>
+            {% endfor %}{% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('register') }}" class="auth-form">
+            <p style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:10px;">Select Your Role</p>
+            <div class="role-cards">
+                <label class="role-card">
+                    <input type="radio" name="role" value="owner" checked>
+                    <div><div class="role-card-label"><i class="fas fa-crown" style="color:#a855f7;margin-right:5px;"></i>Owner</div><div class="role-card-desc">Full access + farm setup</div></div>
+                </label>
+                <label class="role-card">
+                    <input type="radio" name="role" value="manager">
+                    <div><div class="role-card-label"><i class="fas fa-user-tie" style="color:#3b82f6;margin-right:5px;"></i>Manager</div><div class="role-card-desc">Manage all operations</div></div>
+                </label>
+                <label class="role-card">
+                    <input type="radio" name="role" value="field_worker">
+                    <div><div class="role-card-label"><i class="fas fa-hard-hat" style="color:#f59e0b;margin-right:5px;"></i>Field Worker</div><div class="role-card-desc">Log daily activities</div></div>
+                </label>
+                <label class="role-card">
+                    <input type="radio" name="role" value="accountant">
+                    <div><div class="role-card-label"><i class="fas fa-calculator" style="color:#22c55e;margin-right:5px;"></i>Accountant</div><div class="role-card-desc">Financial records</div></div>
+                </label>
+            </div>
+            <div class="form-row" style="grid-template-columns:1fr 1fr;">
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" name="username" placeholder="e.g. john_doe" required>
+                </div>
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" name="email" placeholder="your@email.com" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Password *</label>
+                <input type="password" name="password" placeholder="Minimum 6 characters" required>
+            </div>
+            <div class="form-group">
+                <label>Farm Name *</label>
+                <input type="text" name="farm_name" placeholder="Owner: new farm name | Others: existing farm name" required>
+            </div>
+            <div id="ownerFields">
+                <div class="form-row" style="grid-template-columns:1fr 1fr;">
+                    <div class="form-group">
+                        <label>Farm Location</label>
+                        <input type="text" name="farm_location" placeholder="e.g. Nairobi, Kenya">
+                    </div>
+                    <div class="form-group">
+                        <label>Total Area (acres)</label>
+                        <input type="number" step="0.01" name="farm_area" placeholder="e.g. 50">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary auth-submit">
+                <i class="fas fa-user-plus"></i> Create Account
+            </button>
+        </form>
+        <p style="text-align:center;margin-top:18px;font-size:13px;color:var(--text-muted);">
+            Already have an account? <a href="{{ url_for('login') }}" style="color:var(--primary);text-decoration:none;font-weight:600;">Sign in</a>
+        </p>
+    </div>
+</div>
+<script>
+const roleInputs = document.querySelectorAll('input[name=role]');
+const ownerFields = document.getElementById('ownerFields');
+roleInputs.forEach(r => r.addEventListener('change', () => {
+    ownerFields.style.display = r.value === 'owner' ? '' : 'none';
+}));
+</script>
+{% endblock %}

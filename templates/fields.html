@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+{% block title %}Fields & Crops - Farm Management System{% endblock %}
+
+{% macro attach_panel(entity_type, entity_id, atts) %}
+{% set imgs = atts | selectattr('category', 'equalto', 'image') | list %}
+{% set docs = atts | rejectattr('category', 'equalto', 'image') | list %}
+<div class="attach-panel">
+  {% if imgs %}
+  <div class="attach-section-label"><i class="fas fa-images"></i> Images ({{ imgs|length }})</div>
+  <div class="attach-image-grid">
+    {% for img in imgs %}
+    <div class="attach-thumb">
+      <a href="{{ url_for('view_file', file_id=img.id) }}" target="_blank">
+        <img src="{{ url_for('static', filename='uploads/' ~ img.farm_id ~ '/' ~ img.stored_filename) }}"
+             alt="{{ img.original_filename }}" onerror="this.parentElement.style.display='none'">
+      </a>
+      <p class="attach-name" title="{{ img.original_filename }}">{{ img.original_filename[:22] }}{% if img.original_filename|length > 22 %}…{% endif %}</p>
+      <div class="attach-actions">
+        <a href="{{ url_for('download_file', file_id=img.id) }}" class="btn btn-sm btn-outline" title="Download"><i class="fas fa-download"></i></a>
+        <form method="POST" action="{{ url_for('delete_attachment', file_id=img.id) }}" style="display:inline" onsubmit="return confirm('Delete this attachment?')">
+          <input type="hidden" name="back_url" value="{{ request.url }}">
+          <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if docs %}
+  <div class="attach-section-label"><i class="fas fa-file-alt"></i> Documents ({{ docs|length }})</div>
+  <div class="attach-doc-list">
+    {% for d in docs %}
+    <div class="attach-doc-row">
+      <i class="fas {{ 'fa-file-pdf text-danger' if d.file_type == 'pdf' else 'fa-file-word text-info' if d.file_type in ['doc','docx'] else 'fa-file-excel text-success' if d.file_type in ['xls','xlsx','csv'] else 'fa-file' }}"></i>
+      <div class="attach-doc-info">
+        <span class="attach-doc-name" title="{{ d.original_filename }}">{{ d.original_filename[:40] }}{% if d.original_filename|length > 40 %}…{% endif %}</span>
+        {% if d.description %}<small class="text-muted"> — {{ d.description }}</small>{% endif %}
+      </div>
+      <div class="attach-doc-btns">
+        <a href="{{ url_for('view_file', file_id=d.id) }}" target="_blank" class="btn btn-sm btn-outline"><i class="fas fa-eye"></i></a>
+        <a href="{{ url_for('download_file', file_id=d.id) }}" class="btn btn-sm btn-outline"><i class="fas fa-download"></i></a>
+        <form method="POST" action="{{ url_for('delete_attachment', file_id=d.id) }}" style="display:inline" onsubmit="return confirm('Delete?')">
+          <input type="hidden" name="back_url" value="{{ request.url }}">
+          <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if not imgs and not docs %}
+  <div class="attach-empty"><i class="fas fa-paperclip"></i><p>No attachments yet</p></div>
+  {% endif %}
+  <div class="attach-upload-form">
+    <div class="attach-upload-label"><i class="fas fa-upload"></i> Add Attachment</div>
+    <form method="POST" action="{{ url_for('attach_file', entity_type=entity_type, entity_id=entity_id) }}" enctype="multipart/form-data">
+      <input type="hidden" name="back_url" value="{{ request.url }}">
+      <div class="attach-upload-row">
+        <label class="attach-file-btn">
+          <i class="fas fa-folder-open"></i> Choose File
+          <input type="file" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" style="display:none" required>
+        </label>
+        <input type="text" name="description" class="form-control" placeholder="Description (optional)" maxlength="200" style="flex:1;">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Attach</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-layer-group"></i> Fields & Crop Activities</h1>
+        <div class="page-subtitle">Manage your farm fields and log all crop activities</div>
+    </div>
+    {% if session.get('role') in ['owner','manager'] %}
+    <button class="btn btn-primary" onclick="openModal('addFieldModal')">
+        <i class="fas fa-plus"></i> Add Field
+    </button>
+    {% endif %}
+</div>
+
+<!-- Fields List -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-map"></i> Farm Fields ({{ fields|length }})</span>
+    </div>
+    {% if fields %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Field Name</th><th>Area</th><th>Soil Type</th>
+                <th>Current Crop</th><th>Status</th><th>GPS</th>
+                <th><i class="fas fa-paperclip" title="Attachments"></i></th>
+                {% if session.get('role') in ['owner','manager'] %}<th>Del</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for f in fields %}
+        {% set f_atts = attachments.get(('field', f.id), []) %}
+        <tr>
+            <td><strong>{{ f.name }}</strong></td>
+            <td>{{ f.area or '—' }} {{ f.area_unit or '' }}</td>
+            <td>{{ f.soil_type or '—' }}</td>
+            <td>{{ f.current_crop or '—' }}</td>
+            <td><span class="badge badge-{{ 'success' if f.status == 'active' else 'muted' }}">{{ f.status }}</span></td>
+            <td>{{ f.gps_lat or '—' }}{% if f.gps_lat and f.gps_lng %}, {{ f.gps_lng }}{% endif %}</td>
+            <td>
+                <button class="btn btn-sm btn-outline attach-btn" onclick="openAttach('field', {{ f.id }}, '{{ f.name }}')" title="Attachments">
+                    <i class="fas fa-paperclip"></i>{% if f_atts %}<span class="attach-cnt">{{ f_atts|length }}</span>{% endif %}
+                </button>
+                <template id="attach-field-{{ f.id }}">
+                    {{ attach_panel('field', f.id, f_atts) }}
+                </template>
+            </td>
+            {% if session.get('role') in ['owner','manager'] %}
+            <td>
+                <form method="POST" action="{{ url_for('delete_field', field_id=f.id) }}" style="display:inline;" onsubmit="return confirm('Delete field {{ f.name }}?')">
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-map-marked-alt"></i><p>No fields added yet. Add your first field above.</p></div>
+    {% endif %}
+</div>
+
+<!-- Field Activities Log -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-clipboard-list"></i> Activity Log</span>
+        {% if fields %}
+        <button class="btn btn-primary" onclick="openModal('addActivityModal')">
+            <i class="fas fa-plus"></i> Log Activity
+        </button>
+        {% endif %}
+    </div>
+    {% if activities %}
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th><th>Field</th><th>Activity</th><th>Crop</th>
+                <th>Variety</th><th>Quantity</th><th>Inputs Used</th>
+                <th>Worker</th><th>Notes</th>
+                <th><i class="fas fa-paperclip" title="Attachments"></i></th>
+                {% if session.get('role') in ['owner','manager'] %}<th>Del</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for a in activities %}
+        {% set a_atts = attachments.get(('field_activity', a.id), []) %}
+        <tr>
+            <td>{{ a.activity_date.strftime('%d %b %Y') if a.activity_date else '—' }}</td>
+            <td>{{ a.field_name }}</td>
+            <td><span class="badge badge-{{ 'success' if a.activity_type == 'harvesting' else 'info' if a.activity_type == 'planting' else 'muted' }}">{{ a.activity_type | title }}</span></td>
+            <td>{{ a.crop_name or '—' }}</td>
+            <td>{{ a.variety or '—' }}</td>
+            <td>{{ a.quantity or '—' }} {{ a.unit or '' }}</td>
+            <td>{{ a.inputs_used or '—' }}</td>
+            <td>{{ a.worker_name or '—' }}</td>
+            <td>{{ a.notes or '—' }}</td>
+            <td>
+                <button class="btn btn-sm btn-outline attach-btn" onclick="openAttach('field_activity', {{ a.id }}, '{{ a.activity_type|title }} – {{ a.field_name }}')" title="Attachments">
+                    <i class="fas fa-paperclip"></i>{% if a_atts %}<span class="attach-cnt">{{ a_atts|length }}</span>{% endif %}
+                </button>
+                <template id="attach-field_activity-{{ a.id }}">
+                    {{ attach_panel('field_activity', a.id, a_atts) }}
+                </template>
+            </td>
+            {% if session.get('role') in ['owner','manager'] %}
+            <td>
+                <form method="POST" action="{{ url_for('delete_activity', activity_id=a.id) }}" style="display:inline;" onsubmit="return confirm('Delete this record?')">
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-seedling"></i><p>No activities logged yet</p></div>
+    {% endif %}
+</div>
+
+<!-- Add Field Modal -->
+{% if session.get('role') in ['owner','manager'] %}
+<div class="modal-overlay" id="addFieldModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-map"></i> Add New Field</span>
+            <button class="modal-close" onclick="closeModal('addFieldModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_field') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Field Name *</label>
+                        <input type="text" name="name" placeholder="e.g. North Block" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Current Crop</label>
+                        <input type="text" name="current_crop" placeholder="e.g. Maize, Wheat">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Area</label>
+                        <input type="number" step="0.01" name="area" placeholder="e.g. 25">
+                    </div>
+                    <div class="form-group">
+                        <label>Unit</label>
+                        <select name="area_unit">
+                            <option value="acres">Acres</option>
+                            <option value="hectares">Hectares</option>
+                            <option value="sq_meters">Sq Meters</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Soil Type</label>
+                        <select name="soil_type">
+                            <option value="">Select...</option>
+                            <option>Loamy</option><option>Clay</option><option>Sandy</option>
+                            <option>Silty</option><option>Peaty</option><option>Chalky</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status">
+                            <option value="active">Active</option>
+                            <option value="fallow">Fallow</option>
+                            <option value="resting">Resting</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>GPS Latitude</label>
+                        <input type="text" name="gps_lat" placeholder="e.g. -1.2921">
+                    </div>
+                    <div class="form-group">
+                        <label>GPS Longitude</label>
+                        <input type="text" name="gps_lng" placeholder="e.g. 36.8219">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional notes about this field..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-plus"></i> Add Field
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Log Activity Modal -->
+<div class="modal-overlay" id="addActivityModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title"><i class="fas fa-clipboard-list"></i> Log Field Activity</span>
+            <button class="modal-close" onclick="closeModal('addActivityModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_activity') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Field *</label>
+                        <select name="field_id" required>
+                            <option value="">Select field...</option>
+                            {% for f in fields %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Activity Type *</label>
+                        <select name="activity_type" required>
+                            <option value="">Select type...</option>
+                            <option value="planting">Planting</option>
+                            <option value="spraying">Spraying</option>
+                            <option value="fertilizing">Fertilizing</option>
+                            <option value="scouting">Scouting</option>
+                            <option value="harvesting">Harvesting</option>
+                            <option value="irrigation">Irrigation</option>
+                            <option value="weeding">Weeding</option>
+                            <option value="soil_preparation">Soil Preparation</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" name="activity_date" required value="{{ today }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Crop Name</label>
+                        <input type="text" name="crop_name" placeholder="e.g. Maize, Tomatoes">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Variety</label>
+                        <input type="text" name="variety" placeholder="e.g. Roma VF, H614D">
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" step="0.01" name="quantity" placeholder="e.g. 50">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Unit</label>
+                        <select name="unit">
+                            <option value="">Select...</option>
+                            <option value="kg">kg</option><option value="liters">Liters</option>
+                            <option value="bags">Bags</option><option value="acres">Acres</option>
+                            <option value="plants">Plants</option><option value="tonnes">Tonnes</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Assigned Worker</label>
+                        <select name="worker_id">
+                            <option value="">Self</option>
+                            {% for w in workers %}<option value="{{ w.id }}">{{ w.username }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Inputs / Chemicals Used</label>
+                    <input type="text" name="inputs_used" placeholder="e.g. NPK 10kg, Roundup 2L">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" placeholder="Additional notes..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                    <i class="fas fa-save"></i> Log Activity
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+</script>
+{% endblock %}
