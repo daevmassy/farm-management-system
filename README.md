@@ -1,11 +1,11 @@
-# 🍅 Tomato Farm Management System
+#  Farm Management System
 
-A comprehensive web-based management system for tomato farming operations, built with HTML/CSS frontend and Python Flask backend.
+A comprehensive web-based management system for  farming operations, built with HTML/CSS frontend and Python Flask backend.
 
 ## 📋 Project Overview
 
 **Problem Statement:**
-"Tomato farmers lack a centralized digital system to manage crop lifecycle, resource allocation, and productivity tracking, resulting in inefficiencies and reduced profitability."
+" farmers lack a centralized digital system to manage crop lifecycle, resource allocation, and productivity tracking, resulting in inefficiencies and reduced profitability."
 
 **Solution:**
 This system provides a complete solution for managing all aspects of tomato farming including planting, harvesting, inventory, operations, and sales tracking.
