@@ -120,9 +120,9 @@
     </form>
     <p class="map-coordinate-status" id="mapCoordinateStatus" aria-live="polite">Select a location, then tap the map to place its pin.</p>
     {% endif %}
-    <p class="map-coordinate-status" id="mapLoadNotice" role="status" hidden>The interactive map could not be loaded. Check your internet connection and try again.</p>
+    <p class="map-coordinate-status" id="mapLoadNotice" role="status" hidden></p>
     <div id="farmFieldsMap" class="farm-fields-map" role="application" aria-label="Interactive map showing farm and field locations"></div>
-    <div class="map-attribution-note">Map data © OpenStreetMap contributors</div>
+    <div class="map-attribution-note">Google Maps is used when configured; OpenStreetMap is the fallback.</div>
 </section>
 
 <!-- Fields List -->
@@ -406,31 +406,15 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
 
 const farmMapItems = {{ map_markers|tojson }};
+const googleMapsApiKey = {{ google_maps_api_key|tojson }};
 const mapElement = document.getElementById('farmFieldsMap');
-if (mapElement && !window.L) {
-    document.getElementById('mapLoadNotice').hidden = false;
-} else if (mapElement) {
-    const map = L.map(mapElement, {scrollWheelZoom: false});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-    const savedBounds = [];
-    farmMapItems.forEach(item => {
-        const point = [item.latitude, item.longitude];
-        savedBounds.push(point);
-        const popup = document.createElement('div');
-        const title = document.createElement('strong');
-        title.textContent = item.type + ': ' + item.name;
-        popup.appendChild(title);
-        L.marker(point).addTo(map).bindPopup(popup);
-    });
-    if (savedBounds.length) {
-        map.fitBounds(savedBounds, {padding: [28, 28], maxZoom: 15});
-    } else {
-        map.setView([0, 0], 2);
-    }
-
+const mapLoadNotice = document.getElementById('mapLoadNotice');
+let mapInitialized = false;
+function showMapNotice(message) {
+    mapLoadNotice.textContent = message;
+    mapLoadNotice.hidden = false;
+}
+function configureLocationPicker(mapAdapter) {
     const target = document.getElementById('mapTarget');
     const latitudeInput = document.getElementById('mapLatitude');
     const longitudeInput = document.getElementById('mapLongitude');
@@ -438,26 +422,24 @@ if (mapElement && !window.L) {
     const coordinateStatus = document.getElementById('mapCoordinateStatus');
     const locationForm = document.getElementById('mapLocationForm');
     let selectedMarker = null;
-    function setLocation(latitude, longitude) {
-        const point = [latitude, longitude];
+    function setLocation(latitude, longitude, shouldPan) {
         latitudeInput.value = latitude.toFixed(6);
         longitudeInput.value = longitude.toFixed(6);
-        if (selectedMarker) selectedMarker.setLatLng(point);
-        else selectedMarker = L.marker(point, {draggable: true}).addTo(map);
-        selectedMarker.off('dragend').on('dragend', event => {
-            const position = event.target.getLatLng();
-            latitudeInput.value = position.lat.toFixed(6);
-            longitudeInput.value = position.lng.toFixed(6);
+        const updateCoordinates = (lat, lng) => {
+            latitudeInput.value = lat.toFixed(6);
+            longitudeInput.value = lng.toFixed(6);
             coordinateStatus.textContent = 'Selected: ' + latitudeInput.value + ', ' + longitudeInput.value;
-        });
-        map.panTo(point);
+        };
+        if (selectedMarker) mapAdapter.moveMarker(selectedMarker, latitude, longitude);
+        else selectedMarker = mapAdapter.createSelectedMarker(latitude, longitude, updateCoordinates);
+        if (shouldPan !== false) mapAdapter.panTo(latitude, longitude);
         if (saveButton) saveButton.disabled = false;
         if (coordinateStatus) {
             coordinateStatus.textContent = 'Selected: ' + latitudeInput.value + ', ' + longitudeInput.value;
         }
     }
     if (latitudeInput && longitudeInput) {
-        map.on('click', event => setLocation(event.latlng.lat, event.latlng.lng));
+        mapAdapter.onMapClick(setLocation);
     }
 
     if (target) {
@@ -469,14 +451,14 @@ if (mapElement && !window.L) {
                 const longitude = Number(option.dataset.lng);
                 if (Number.isFinite(latitude) && Number.isFinite(longitude)
                     && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) {
-                    setLocation(latitude, longitude);
+                    setLocation(latitude, longitude, false);
                     return;
                 }
             }
             latitudeInput.value = '';
             longitudeInput.value = '';
             if (selectedMarker) {
-                map.removeLayer(selectedMarker);
+                mapAdapter.removeMarker(selectedMarker);
                 selectedMarker = null;
             }
             saveButton.disabled = true;
@@ -496,6 +478,114 @@ if (mapElement && !window.L) {
             );
         });
     }
+}
+function initializeOpenStreetMap(notice) {
+    if (mapInitialized) return;
+    if (!window.L) {
+        showMapNotice('The map could not be loaded. Check your internet connection and try again.');
+        return;
+    }
+    mapInitialized = true;
+    const map = L.map(mapElement, {scrollWheelZoom: false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    if (farmMapItems.length === 1) {
+        map.setView([farmMapItems[0].latitude, farmMapItems[0].longitude], 14);
+    } else if (farmMapItems.length > 1) {
+        map.fitBounds(farmMapItems.map(item => [item.latitude, item.longitude]), {padding: [28, 28], maxZoom: 15});
+    } else {
+        map.setView([0, 0], 2);
+    }
+    farmMapItems.forEach(item => {
+        const popup = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = item.type + ': ' + item.name;
+        popup.appendChild(title);
+        L.marker([item.latitude, item.longitude]).addTo(map).bindPopup(popup);
+    });
+    configureLocationPicker({
+        createSelectedMarker: (lat, lng, onMove) => L.marker([lat, lng], {draggable: true})
+            .addTo(map)
+            .on('dragend', event => {
+                const position = event.target.getLatLng();
+                onMove(position.lat, position.lng);
+            }),
+        moveMarker: (marker, lat, lng) => marker.setLatLng([lat, lng]),
+        removeMarker: marker => map.removeLayer(marker),
+        panTo: (lat, lng) => map.panTo([lat, lng]),
+        onMapClick: callback => map.on('click', event => callback(event.latlng.lat, event.latlng.lng)),
+    });
+    if (notice) showMapNotice(notice);
+    else mapLoadNotice.hidden = true;
+}
+function initializeGoogleMap() {
+    if (mapInitialized || !window.google || !window.google.maps) return;
+    mapInitialized = true;
+    const center = farmMapItems.length
+        ? {lat: farmMapItems[0].latitude, lng: farmMapItems[0].longitude}
+        : {lat: 0, lng: 0};
+    const map = new google.maps.Map(mapElement, {
+        center,
+        zoom: farmMapItems.length ? 14 : 2,
+        mapTypeId: 'roadmap',
+        mapTypeControl: true,
+        streetViewControl: false,
+        fullscreenControl: true,
+    });
+    if (farmMapItems.length > 1) {
+        const bounds = new google.maps.LatLngBounds();
+        farmMapItems.forEach(item => bounds.extend({lat: item.latitude, lng: item.longitude}));
+        map.fitBounds(bounds);
+    }
+    farmMapItems.forEach(item => {
+        const marker = new google.maps.Marker({
+            map,
+            position: {lat: item.latitude, lng: item.longitude},
+            title: item.type + ': ' + item.name,
+        });
+        const popup = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = item.type + ': ' + item.name;
+        popup.appendChild(title);
+        const infoWindow = new google.maps.InfoWindow({content: popup});
+        marker.addListener('click', () => infoWindow.open({map, anchor: marker}));
+    });
+    configureLocationPicker({
+        createSelectedMarker: (lat, lng, onMove) => {
+            const marker = new google.maps.Marker({
+                map,
+                position: {lat, lng},
+                draggable: true,
+            });
+            marker.addListener('dragend', event => onMove(event.latLng.lat(), event.latLng.lng()));
+            return marker;
+        },
+        moveMarker: (marker, lat, lng) => marker.setPosition({lat, lng}),
+        removeMarker: marker => marker.setMap(null),
+        panTo: (lat, lng) => {
+            map.panTo({lat, lng});
+            if (map.getZoom() < 14) map.setZoom(14);
+        },
+        onMapClick: callback => map.addListener('click', event => callback(event.latLng.lat(), event.latLng.lng())),
+    });
+    mapLoadNotice.hidden = true;
+}
+
+if (mapElement && googleMapsApiKey) {
+    showMapNotice('Loading Google Maps...');
+    window.initGoogleFarmMap = initializeGoogleMap;
+    window.gm_authFailure = () => initializeOpenStreetMap('Google Maps could not authenticate. Check the restricted API key and billing; showing OpenStreetMap instead.');
+    const googleScript = document.createElement('script');
+    googleScript.src = 'https://maps.googleapis.com/maps/api/js?key='
+        + encodeURIComponent(googleMapsApiKey)
+        + '&callback=initGoogleFarmMap&loading=async';
+    googleScript.async = true;
+    googleScript.onerror = () => initializeOpenStreetMap('Google Maps failed to load. Showing OpenStreetMap instead.');
+    document.head.appendChild(googleScript);
+} else if (mapElement) {
+    initializeOpenStreetMap('Google Maps is not configured yet. Showing OpenStreetMap until GOOGLE_MAPS_API_KEY is set.');
 }
 </script>
 {% endblock %}

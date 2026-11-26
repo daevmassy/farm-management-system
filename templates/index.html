@@ -47,9 +47,16 @@
 
 <div class="dashboard-grid">
     <!-- Recent Field Activities -->
-    <div class="card">
+    <div class="card {{ 'dashboard-empty-panel' if not recent_activities }}">
         <div class="card-header">
+            {% if recent_activities %}
             <span class="card-title"><i class="fas fa-history"></i> Recent Field Activities</span>
+            {% else %}
+            <button type="button" class="dashboard-panel-toggle" aria-expanded="false" aria-controls="emptyRecentActivities" onclick="toggleDashboardPanel(this)">
+                <span class="card-title"><i class="fas fa-history"></i> Recent Field Activities</span>
+                <i class="fas fa-chevron-down panel-toggle-icon" aria-hidden="true"></i>
+            </button>
+            {% endif %}
             <a href="{{ url_for('fields') }}" class="btn btn-secondary btn-sm">View All</a>
         </div>
         {% if recent_activities %}
@@ -68,14 +75,21 @@
             </div>
             {% endfor %}
         {% else %}
-        <div class="empty-state"><i class="fas fa-leaf"></i><p>No field activities logged yet</p></div>
+        <div class="empty-state dashboard-empty-state" id="emptyRecentActivities"><i class="fas fa-leaf"></i><p>No field activities logged yet</p></div>
         {% endif %}
     </div>
 
     <!-- Pending Tasks -->
-    <div class="card">
+    <div class="card {{ 'dashboard-empty-panel' if not pending_tasks }}">
         <div class="card-header">
+            {% if pending_tasks %}
             <span class="card-title"><i class="fas fa-clipboard-list"></i> Upcoming Tasks</span>
+            {% else %}
+            <button type="button" class="dashboard-panel-toggle" aria-expanded="false" aria-controls="emptyUpcomingTasks" onclick="toggleDashboardPanel(this)">
+                <span class="card-title"><i class="fas fa-clipboard-list"></i> Upcoming Tasks</span>
+                <i class="fas fa-chevron-down panel-toggle-icon" aria-hidden="true"></i>
+            </button>
+            {% endif %}
             <a href="{{ url_for('tasks') }}" class="btn btn-secondary btn-sm">View All</a>
         </div>
         {% if pending_tasks %}
@@ -92,14 +106,21 @@
             </div>
             {% endfor %}
         {% else %}
-        <div class="empty-state"><i class="fas fa-check-double"></i><p>No pending tasks</p></div>
+        <div class="empty-state dashboard-empty-state" id="emptyUpcomingTasks"><i class="fas fa-check-double"></i><p>No pending tasks</p></div>
         {% endif %}
     </div>
 
     <!-- Low Stock Alerts -->
-    <div class="card">
+    <div class="card {{ 'dashboard-empty-panel' if not low_stock }}">
         <div class="card-header">
+            {% if low_stock %}
             <span class="card-title"><i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i> Low Stock Alerts</span>
+            {% else %}
+            <button type="button" class="dashboard-panel-toggle" aria-expanded="false" aria-controls="emptyLowStock" onclick="toggleDashboardPanel(this)">
+                <span class="card-title"><i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i> Low Stock Alerts</span>
+                <i class="fas fa-chevron-down panel-toggle-icon" aria-hidden="true"></i>
+            </button>
+            {% endif %}
             <a href="{{ url_for('inventory') }}" class="btn btn-secondary btn-sm">Inventory</a>
         </div>
         {% if low_stock %}
@@ -119,14 +140,21 @@
             </table>
             </div>
         {% else %}
-        <div class="empty-state"><i class="fas fa-boxes"></i><p>All stock levels are adequate</p></div>
+        <div class="empty-state dashboard-empty-state" id="emptyLowStock"><i class="fas fa-boxes"></i><p>All stock levels are adequate</p></div>
         {% endif %}
     </div>
 
     <!-- Equipment Maintenance Due -->
-    <div class="card">
+    <div class="card {{ 'dashboard-empty-panel' if not upcoming_maintenance }}">
         <div class="card-header">
+            {% if upcoming_maintenance %}
             <span class="card-title"><i class="fas fa-wrench" style="color:var(--warning)"></i> Maintenance Due Soon</span>
+            {% else %}
+            <button type="button" class="dashboard-panel-toggle" aria-expanded="false" aria-controls="emptyMaintenance" onclick="toggleDashboardPanel(this)">
+                <span class="card-title"><i class="fas fa-wrench" style="color:var(--warning)"></i> Maintenance Due Soon</span>
+                <i class="fas fa-chevron-down panel-toggle-icon" aria-hidden="true"></i>
+            </button>
+            {% endif %}
             <a href="{{ url_for('equipment') }}" class="btn btn-secondary btn-sm">Equipment</a>
         </div>
         {% if upcoming_maintenance %}
@@ -142,8 +170,18 @@
             </div>
             {% endfor %}
         {% else %}
-        <div class="empty-state"><i class="fas fa-tractor"></i><p>No maintenance due in next 30 days</p></div>
+        <div class="empty-state dashboard-empty-state" id="emptyMaintenance"><i class="fas fa-tractor"></i><p>No maintenance due in next 30 days</p></div>
         {% endif %}
     </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleDashboardPanel(button) {
+    const expanded = button.getAttribute('aria-expanded') !== 'true';
+    const panel = button.closest('.dashboard-empty-panel');
+    button.setAttribute('aria-expanded', String(expanded));
+    panel.classList.toggle('expanded', expanded);
+}
+</script>
 {% endblock %}

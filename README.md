@@ -134,6 +134,12 @@ plans: the web service has ephemeral file storage, and the PostgreSQL database
 expires after 30 days. Back up uploaded files and database data as needed, or
 upgrade to paid plans for persistent storage.
 
+For Google Maps on the farm and fields page, configure a `GOOGLE_MAPS_API_KEY`
+environment variable for the Render web service. Enable and restrict the Maps
+JavaScript API key to your site's HTTP referrers; the map falls back to
+OpenStreetMap when no key is configured. See [DEPLOYMENT_NOTE.md](DEPLOYMENT_NOTE.md)
+for setup details.
+
 ## 📊 Database Schema
 
 The PostgreSQL schema in `database/schema_fms.sql` is applied automatically at

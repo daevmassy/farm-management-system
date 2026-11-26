@@ -425,6 +425,7 @@ def fields():
         attachments=attachments,
         farm_location=farm_location,
         map_markers=map_markers,
+        google_maps_api_key=os.environ.get('GOOGLE_MAPS_API_KEY', ''),
     )
 
 
