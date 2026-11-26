@@ -2,15 +2,11 @@ services:
   - type: web
     name: Zim Farm Management System
     runtime: python
-    plan: 0.5c-512mb
+    plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn main:app --workers 1 --bind 0.0.0.0:$PORT
     healthCheckPath: /login
-    disk:
-      name: farm-uploads
-      mountPath: /opt/render/project/src/static/uploads
-      sizeGB: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -23,5 +19,5 @@ databases:
   - name: farm-management-db
     databaseName: farm_management
     user: farm_management
-    plan: 0.1c-256mb
+    plan: free
     region: oregon

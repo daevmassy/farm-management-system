@@ -121,8 +121,10 @@ The application will be available at: `http://localhost:5000`
 
 Create a new Blueprint in Render from this repository and Render will provision
 the Flask web service and PostgreSQL database defined in `render.yaml`. The
-service initializes its tables on startup. The web service and database use
-paid plans; the attached persistent disk keeps uploaded files across deploys.
+service initializes its tables on startup. Both resources use Render's free
+plans: the web service has ephemeral file storage, and the PostgreSQL database
+expires after 30 days. Back up uploaded files and database data as needed, or
+upgrade to paid plans for persistent storage.
 
 ## 📊 Database Schema
 
