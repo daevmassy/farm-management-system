@@ -1,8 +1,8 @@
 services:
   - type: web
-    name: farm-management-system
+    name: Zim Farm Management System
     runtime: python
-    plan: starter
+    plan: 0.5c-512mb
     region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn main:app --workers 1 --bind 0.0.0.0:$PORT
@@ -23,5 +23,5 @@ databases:
   - name: farm-management-db
     databaseName: farm_management
     user: farm_management
-    plan: basic-256mb
+    plan: 0.1c-256mb
     region: oregon
