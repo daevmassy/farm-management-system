@@ -45,12 +45,20 @@ This system provides a complete solution for managing all aspects of tomato farm
 5. **⚙️ Operations Recording**
    - Log farm operations (spraying, weeding, irrigation, fertilizing)
    - Track operation costs and workers
-   - Field location mapping
+   - Map farm and field locations with GPS pins
 
-6. **💰 Sales Management**
+6. **🐄 Livestock Management**
+   - Track herd groups, births, deaths, and sales
+   - Record vaccinations, dosing, dosage, and follow-up dates
+   - View monthly herd growth, mortality, and treatment charts
+
+7. **💰 Sales Management**
    - Record sales transactions
    - Track customer information
    - Monitor payment status and revenue
+
+The interface adapts to mobile screens with compact spacing and touch-friendly
+navigation and forms.
 
 ## 💻 Technology Stack
 

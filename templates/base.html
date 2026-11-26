@@ -6,6 +6,7 @@
     <title>{% block title %}Farm Management System{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    {% block head %}{% endblock %}
 </head>
 <body>
     {% if session.get('user_id') %}
@@ -86,10 +87,11 @@
                 </div>
             </div>
         </aside>
+        <button class="mobile-menu-backdrop" id="mobileMenuBackdrop" type="button" aria-label="Close navigation" onclick="toggleSidebar(false)"></button>
 
         <!-- Mobile topbar -->
         <div class="mobile-topbar">
-            <button class="menu-toggle" onclick="toggleSidebar()">
+            <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle navigation" aria-expanded="false">
                 <i class="fas fa-bars"></i>
             </button>
             <span class="mobile-title"><i class="fas fa-seedling"></i> FarmMS</span>
@@ -146,8 +148,17 @@
             const isDark = document.body.classList.toggle('light-theme');
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
         }
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
+        function toggleSidebar(open) {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('mobileMenuBackdrop');
+            if (!sidebar || !backdrop) return;
+            const isOpen = typeof open === 'boolean'
+                ? open
+                : !sidebar.classList.contains('open');
+            sidebar.classList.toggle('open', isOpen);
+            backdrop.classList.toggle('open', isOpen);
+            const menuToggle = document.querySelector('.menu-toggle');
+            if (menuToggle) menuToggle.setAttribute('aria-expanded', String(isOpen));
         }
         document.addEventListener('DOMContentLoaded', function() {
             if (localStorage.getItem('theme') === 'light') {
@@ -158,6 +169,12 @@
             setTimeout(() => {
                 document.querySelectorAll('.alert').forEach(a => a.style.opacity = '0');
             }, 5000);
+            document.querySelectorAll('.sidebar-nav .nav-item').forEach(link => {
+                link.addEventListener('click', () => toggleSidebar(false));
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') toggleSidebar(false);
+            });
         });
     </script>
     {% block scripts %}{% endblock %}

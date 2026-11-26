@@ -81,6 +81,64 @@
     {% endif %}
 </div>
 
+<div class="stats-grid livestock-summary">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-horse"></i></div>
+        <div>
+            <div class="stat-value">{{ livestock_metrics.current_population }}</div>
+            <div class="stat-label">Animals in herd</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-baby"></i></div>
+        <div>
+            <div class="stat-value">{{ livestock_metrics.growth_rate[-1] if livestock_metrics.growth_rate else 0 }}%</div>
+            <div class="stat-label">Net herd growth this month</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon danger"><i class="fas fa-heartbeat"></i></div>
+        <div>
+            <div class="stat-value">{{ livestock_metrics.mortality_rate[-1] if livestock_metrics.mortality_rate else 0 }}%</div>
+            <div class="stat-label">Mortality this month</div>
+        </div>
+    </div>
+</div>
+
+<section class="livestock-analytics">
+    <div class="card livestock-chart-card">
+        <div class="card-header">
+            <div>
+                <span class="card-title"><i class="fas fa-chart-line"></i> Herd Growth & Mortality Rates</span>
+                <p class="map-help">Birth, mortality, and net herd change as a percentage of animals at the start of each month.</p>
+            </div>
+        </div>
+        <div class="livestock-chart">
+            <canvas id="herdRatesChart" aria-label="Monthly herd birth and mortality rates"></canvas>
+            <p class="chart-library-notice" id="chartLibraryNotice" hidden>Charts could not be loaded. Check your internet connection and try again.</p>
+        </div>
+    </div>
+    <div class="card livestock-chart-card">
+        <div class="card-header">
+            <div>
+                <span class="card-title"><i class="fas fa-chart-area"></i> Herd Size & Animal Events</span>
+                <p class="map-help">Estimated herd size and recorded births, deaths, and sales by month.</p>
+            </div>
+        </div>
+        <div class="livestock-chart"><canvas id="herdEventsChart" aria-label="Herd size and monthly births, deaths, and sales"></canvas></div>
+    </div>
+    <div class="card livestock-chart-card">
+        <div class="card-header">
+            <div>
+                <span class="card-title"><i class="fas fa-syringe"></i> Vaccinations & Dosing</span>
+                <p class="map-help">Animals recorded as vaccinated or dosed each month.</p>
+            </div>
+        </div>
+        <div class="livestock-chart"><canvas id="herdTreatmentsChart" aria-label="Monthly vaccination and dosing records"></canvas></div>
+    </div>
+</section>
+<p class="livestock-chart-note"><i class="fas fa-info-circle"></i> Rates are calculated from animal counts entered in records. Population history is estimated from the current group counts and recorded births, deaths, and sales.</p>
+
 <!-- Livestock Groups -->
 <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
@@ -122,7 +180,7 @@
                 {% endif %}
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button class="btn btn-secondary btn-sm" onclick="openRecordModal({{ g.id }}, '{{ g.name }}')">
+                <button class="btn btn-secondary btn-sm" onclick='openRecordModal({{ g.id }}, {{ g.name|tojson }})'>
                     <i class="fas fa-plus"></i> Add Record
                 </button>
                 <button class="btn btn-sm btn-outline attach-btn" onclick="openAttach('livestock_group', {{ g.id }}, '{{ g.name }}')" title="Attachments">
@@ -156,7 +214,8 @@
         <thead>
             <tr>
                 <th>Date</th><th>Group</th><th>Species</th><th>Record Type</th>
-                <th>Description</th><th>Qty</th><th>Cost</th><th>Notes</th>
+                <th>Description</th><th>Animals</th><th>Treatment</th><th>Dosage</th>
+                <th>Next Due</th><th>Qty</th><th>Cost</th><th>Notes</th>
                 <th><i class="fas fa-paperclip" title="Attachments"></i></th>
                 {% if session.get('role') in ['owner','manager'] %}<th>Del</th>{% endif %}
             </tr>
@@ -168,8 +227,12 @@
             <td>{{ r.record_date.strftime('%d %b %Y') if r.record_date else '—' }}</td>
             <td>{{ r.group_name }}</td>
             <td>{{ r.species }}</td>
-            <td><span class="badge badge-{{ 'danger' if r.record_type == 'health' else 'info' if r.record_type == 'breeding' else 'warning' if r.record_type == 'feeding' else 'muted' }}">{{ r.record_type | title }}</span></td>
+            <td><span class="badge badge-{{ 'danger' if r.record_type in ['health', 'death'] else 'success' if r.record_type == 'birth' else 'info' if r.record_type in ['breeding', 'vaccination', 'dosing'] else 'warning' if r.record_type == 'feeding' else 'muted' }}">{{ r.record_type | title }}</span></td>
             <td>{{ r.description or '—' }}</td>
+            <td>{{ r.animal_count or '—' }}</td>
+            <td>{{ r.treatment_name or '—' }}</td>
+            <td>{{ r.dosage or '—' }}</td>
+            <td>{{ r.next_due_date.strftime('%d %b %Y') if r.next_due_date else '—' }}</td>
             <td>{{ r.quantity or '—' }}</td>
             <td>{{ "%.2f"|format(r.cost) if r.cost else '—' }}</td>
             <td>{{ r.notes or '—' }}</td>
@@ -266,9 +329,11 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Record Type *</label>
-                        <select name="record_type" required>
+                        <select name="record_type" id="recordType" required>
                             <option value="">Select...</option>
                             <option value="health">Health / Veterinary</option>
+                            <option value="vaccination">Vaccination</option>
+                            <option value="dosing">Dosing / deworming</option>
                             <option value="breeding">Breeding</option>
                             <option value="feeding">Feeding</option>
                             <option value="movement">Movement</option>
@@ -283,13 +348,33 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" name="description" placeholder="e.g. Vaccination - FMD, Fed 50kg hay">
+                    <label>Description / notes</label>
+                    <input type="text" name="description" placeholder="Optional details about this record">
+                </div>
+                <div class="form-row">
+                    <div class="form-group" id="recordAnimalCountGroup">
+                        <label>Number of animals</label>
+                        <input type="number" step="1" min="1" name="animal_count" id="recordAnimalCount" placeholder="e.g. 3">
+                    </div>
+                    <div class="form-group" id="recordTreatmentGroup" hidden>
+                        <label>Vaccine / medication *</label>
+                        <input type="text" name="treatment_name" id="recordTreatment" maxlength="200" placeholder="e.g. FMD vaccine">
+                    </div>
+                    <div class="form-group" id="recordDosageGroup" hidden>
+                        <label>Dosage</label>
+                        <input type="text" name="dosage" placeholder="e.g. 5 ml per animal">
+                    </div>
+                </div>
+                <div class="form-row" id="recordDueDateRow" hidden>
+                    <div class="form-group">
+                        <label>Next dose / review due</label>
+                        <input type="date" name="next_due_date">
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Quantity</label>
-                        <input type="number" step="0.01" name="quantity" placeholder="e.g. 5 animals">
+                        <label>Other quantity</label>
+                        <input type="number" step="0.01" name="quantity" placeholder="e.g. 50 kg feed">
                     </div>
                     <div class="form-group">
                         <label>Cost</label>
@@ -310,6 +395,7 @@
 
 {% endblock %}
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -319,5 +405,70 @@ function openRecordModal(groupId, groupName) {
     openModal('addRecordModal');
 }
 document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+
+const livestockMetrics = {{ livestock_metrics|tojson }};
+if (window.Chart) {
+    const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-muted').trim();
+    const chartGridColor = getComputedStyle(document.body).getPropertyValue('--border').trim();
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {mode: 'index', intersect: false},
+        plugins: {legend: {labels: {color: chartTextColor, usePointStyle: true, boxWidth: 8}}},
+        scales: {
+            x: {ticks: {color: chartTextColor, maxRotation: 45, minRotation: 0}, grid: {color: chartGridColor}},
+            y: {beginAtZero: true, ticks: {color: chartTextColor}, grid: {color: chartGridColor}}
+        }
+    };
+    const labels = livestockMetrics.labels;
+    new Chart(document.getElementById('herdRatesChart'), {
+        type: 'line',
+        data: {labels, datasets: [
+            {label: 'Birth rate (%)', data: livestockMetrics.birth_rate, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,.12)', tension: .3},
+            {label: 'Mortality rate (%)', data: livestockMetrics.mortality_rate, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.10)', tension: .3},
+            {label: 'Net herd growth (%)', data: livestockMetrics.growth_rate, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.10)', tension: .3}
+        ]},
+        options: {...commonOptions, scales: {...commonOptions.scales, y: {...commonOptions.scales.y, title: {display: true, text: 'Rate (%)', color: chartTextColor}}}}
+    });
+    new Chart(document.getElementById('herdEventsChart'), {
+        type: 'bar',
+        data: {labels, datasets: [
+            {type: 'line', label: 'Estimated herd size', data: livestockMetrics.population, borderColor: '#3b82f6', backgroundColor: '#3b82f6', yAxisID: 'population'},
+            {label: 'Births', data: livestockMetrics.births, backgroundColor: 'rgba(34,197,94,.7)'},
+            {label: 'Deaths', data: livestockMetrics.deaths, backgroundColor: 'rgba(239,68,68,.7)'},
+            {label: 'Sales', data: livestockMetrics.sales, backgroundColor: 'rgba(245,158,11,.7)'}
+        ]},
+        options: {...commonOptions, scales: {...commonOptions.scales, y: {...commonOptions.scales.y, position: 'left', title: {display: true, text: 'Animals', color: chartTextColor}}, population: {type: 'linear', position: 'right', beginAtZero: true, grid: {drawOnChartArea: false}, ticks: {color: chartTextColor}, title: {display: true, text: 'Herd size', color: chartTextColor}}}}
+    });
+    new Chart(document.getElementById('herdTreatmentsChart'), {
+        type: 'bar',
+        data: {labels, datasets: [
+            {label: 'Vaccinated', data: livestockMetrics.vaccinations, backgroundColor: 'rgba(59,130,246,.75)'},
+            {label: 'Dosed', data: livestockMetrics.dosing, backgroundColor: 'rgba(168,85,247,.75)'}
+        ]},
+        options: commonOptions
+    });
+} else {
+    document.getElementById('chartLibraryNotice').hidden = false;
+}
+
+const recordType = document.getElementById('recordType');
+const animalCount = document.getElementById('recordAnimalCount');
+const treatmentGroup = document.getElementById('recordTreatmentGroup');
+const treatmentInput = document.getElementById('recordTreatment');
+const dosageGroup = document.getElementById('recordDosageGroup');
+const dueDateRow = document.getElementById('recordDueDateRow');
+function updateRecordFields() {
+    const type = recordType.value;
+    const needsAnimalCount = ['birth', 'death', 'sale', 'vaccination', 'dosing'].includes(type);
+    const needsTreatment = ['vaccination', 'dosing'].includes(type);
+    animalCount.required = needsAnimalCount;
+    treatmentInput.required = needsTreatment;
+    treatmentGroup.hidden = !needsTreatment;
+    dosageGroup.hidden = !needsTreatment;
+    dueDateRow.hidden = !needsTreatment;
+}
+recordType.addEventListener('change', updateRecordFields);
+updateRecordFields();
 </script>
 {% endblock %}

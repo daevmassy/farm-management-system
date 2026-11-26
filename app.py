@@ -76,6 +76,19 @@ def release_db_connection(conn):
         connection_pool.putconn(conn)
 
 
+def parse_coordinates(latitude, longitude):
+    if not latitude and not longitude:
+        return None, None
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError):
+        raise ValueError("Enter valid numeric latitude and longitude coordinates.")
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        raise ValueError("Coordinates must be within valid latitude and longitude ranges.")
+    return latitude, longitude
+
+
 def init_db():
     conn = get_db_connection()
     if not conn:
@@ -358,10 +371,13 @@ def fields():
     field_list = []
     activities = []
     workers = []
+    farm_location = None
     conn = get_db_connection()
     if conn:
         try:
             cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
+            cursor.execute("SELECT name, location, latitude, longitude FROM farms WHERE id = %s", (farm_id,))
+            farm_location = cursor.fetchone()
             cursor.execute("SELECT * FROM fields WHERE farm_id = %s ORDER BY name", (farm_id,))
             field_list = cursor.fetchall()
             cursor.execute("""
@@ -377,10 +393,39 @@ def fields():
             cursor.close()
         except Exception as e:
             logging.error(f"Fields error: {e}")
+            flash('Could not load farm and field map data.', 'error')
         finally:
             release_db_connection(conn)
     attachments = get_attachments_for(farm_id, ['field', 'field_activity'])
-    return render_template('fields.html', fields=field_list, activities=activities, workers=workers, attachments=attachments)
+    map_markers = []
+    if farm_location and farm_location.get('latitude') is not None and farm_location.get('longitude') is not None:
+        map_markers.append({
+            'name': farm_location['name'],
+            'type': 'Farm',
+            'latitude': float(farm_location['latitude']),
+            'longitude': float(farm_location['longitude']),
+        })
+    for field in field_list:
+        try:
+            latitude, longitude = parse_coordinates(field.get('gps_lat'), field.get('gps_lng'))
+        except ValueError:
+            continue
+        if latitude is not None:
+            map_markers.append({
+                'name': field['name'],
+                'type': 'Field',
+                'latitude': latitude,
+                'longitude': longitude,
+            })
+    return render_template(
+        'fields.html',
+        fields=field_list,
+        activities=activities,
+        workers=workers,
+        attachments=attachments,
+        farm_location=farm_location,
+        map_markers=map_markers,
+    )
 
 
 @app.route('/fields/add', methods=['POST'])
@@ -392,8 +437,14 @@ def add_field():
     area = request.form.get('area') or None
     area_unit = request.form.get('area_unit', 'acres')
     soil_type = request.form.get('soil_type', '').strip()
-    gps_lat = request.form.get('gps_lat', '').strip()
-    gps_lng = request.form.get('gps_lng', '').strip()
+    try:
+        gps_lat, gps_lng = parse_coordinates(
+            request.form.get('gps_lat', '').strip(),
+            request.form.get('gps_lng', '').strip(),
+        )
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(url_for('fields'))
     current_crop = request.form.get('current_crop', '').strip()
     notes = request.form.get('notes', '').strip()
     if not name:
@@ -406,7 +457,12 @@ def add_field():
             cursor.execute("""
                 INSERT INTO fields (farm_id, name, area, area_unit, soil_type, gps_lat, gps_lng, current_crop, notes)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (farm_id, name, area, area_unit, soil_type or None, gps_lat or None, gps_lng or None, current_crop or None, notes or None))
+            """, (
+                farm_id, name, area, area_unit, soil_type or None,
+                gps_lat if gps_lat is not None else None,
+                gps_lng if gps_lng is not None else None,
+                current_crop or None, notes or None,
+            ))
             conn.commit()
             cursor.close()
             flash(f'Field "{name}" added successfully!', 'success')
@@ -416,6 +472,86 @@ def add_field():
             flash('Error adding field.', 'error')
         finally:
             release_db_connection(conn)
+    return redirect(url_for('fields'))
+
+
+@app.route('/farm/location', methods=['POST'])
+@login_required
+@manage_required
+def update_farm_location():
+    farm_id = session.get('farm_id')
+    try:
+        latitude, longitude = parse_coordinates(
+            request.form.get('latitude', '').strip(),
+            request.form.get('longitude', '').strip(),
+        )
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(url_for('fields'))
+    if latitude is None:
+        flash('Select a location on the map before saving.', 'error')
+        return redirect(url_for('fields'))
+    conn = get_db_connection()
+    if not conn:
+        flash('Database connection error.', 'error')
+        return redirect(url_for('fields'))
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE farms SET latitude = %s, longitude = %s WHERE id = %s",
+            (latitude, longitude, farm_id),
+        )
+        if cursor.rowcount == 0:
+            raise ValueError("Farm could not be found.")
+        conn.commit()
+        cursor.close()
+        flash('Farm location saved.', 'success')
+    except Exception as e:
+        logging.error(f"Farm location update error: {e}")
+        conn.rollback()
+        flash('Could not save farm location.', 'error')
+    finally:
+        release_db_connection(conn)
+    return redirect(url_for('fields'))
+
+
+@app.route('/fields/<int:field_id>/location', methods=['POST'])
+@login_required
+@manage_required
+def update_field_location(field_id):
+    farm_id = session.get('farm_id')
+    try:
+        latitude, longitude = parse_coordinates(
+            request.form.get('latitude', '').strip(),
+            request.form.get('longitude', '').strip(),
+        )
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(url_for('fields'))
+    if latitude is None:
+        flash('Select a location on the map before saving.', 'error')
+        return redirect(url_for('fields'))
+    conn = get_db_connection()
+    if not conn:
+        flash('Database connection error.', 'error')
+        return redirect(url_for('fields'))
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE fields SET gps_lat = %s, gps_lng = %s WHERE id = %s AND farm_id = %s",
+            (latitude, longitude, field_id, farm_id),
+        )
+        if cursor.rowcount == 0:
+            raise ValueError("Field could not be found for this farm.")
+        conn.commit()
+        cursor.close()
+        flash('Field location saved.', 'success')
+    except Exception as e:
+        logging.error(f"Field location update error: {e}")
+        conn.rollback()
+        flash('Could not save field location.', 'error')
+    finally:
+        release_db_connection(conn)
     return redirect(url_for('fields'))
 
 
@@ -509,6 +645,11 @@ def livestock():
     farm_id = session.get('farm_id')
     groups = []
     records = []
+    livestock_metrics = {
+        'labels': [], 'population': [], 'birth_rate': [], 'mortality_rate': [], 'growth_rate': [],
+        'births': [], 'deaths': [], 'sales': [], 'vaccinations': [], 'dosing': [],
+        'current_population': 0,
+    }
     conn = get_db_connection()
     if conn:
         try:
@@ -521,13 +662,75 @@ def livestock():
                 WHERE lg.farm_id = %s ORDER BY lr.record_date DESC LIMIT 50
             """, (farm_id,))
             records = cursor.fetchall()
+            cursor.execute("""
+                SELECT date_trunc('month', lr.record_date)::date AS month,
+                       lr.record_type, COALESCE(SUM(lr.animal_count), 0)::integer AS animals
+                FROM livestock_records lr
+                JOIN livestock_groups lg ON lr.livestock_group_id = lg.id
+                WHERE lg.farm_id = %s
+                  AND lr.record_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+                  AND lr.record_date <= CURRENT_DATE
+                  AND lr.record_type IN ('birth', 'death', 'sale', 'vaccination', 'dosing')
+                GROUP BY 1, 2 ORDER BY 1
+            """, (farm_id,))
+            monthly_records = cursor.fetchall()
             cursor.close()
+
+            month_starts = []
+            today = date.today()
+            for offset in range(11, -1, -1):
+                month_index = today.year * 12 + today.month - 1 - offset
+                month_starts.append(date(month_index // 12, month_index % 12 + 1, 1))
+            month_data = {
+                month: {'birth': 0, 'death': 0, 'sale': 0, 'vaccination': 0, 'dosing': 0}
+                for month in month_starts
+            }
+            for row in monthly_records:
+                month = row['month']
+                if month in month_data and row['record_type'] in month_data[month]:
+                    month_data[month][row['record_type']] = row['animals']
+
+            current_population = sum(int(group['count'] or 0) for group in groups)
+            livestock_metrics['current_population'] = current_population
+            net_change = sum(
+                values['birth'] - values['death'] - values['sale']
+                for values in month_data.values()
+            )
+            population = max(0, current_population - net_change)
+            for month in month_starts:
+                values = month_data[month]
+                opening_population = population
+                livestock_metrics['labels'].append(month.strftime('%b %Y'))
+                livestock_metrics['births'].append(values['birth'])
+                livestock_metrics['deaths'].append(values['death'])
+                livestock_metrics['sales'].append(values['sale'])
+                livestock_metrics['vaccinations'].append(values['vaccination'])
+                livestock_metrics['dosing'].append(values['dosing'])
+                livestock_metrics['birth_rate'].append(
+                    round(values['birth'] / opening_population * 100, 2) if opening_population else 0
+                )
+                livestock_metrics['mortality_rate'].append(
+                    round(values['death'] / opening_population * 100, 2) if opening_population else 0
+                )
+                livestock_metrics['growth_rate'].append(
+                    round((values['birth'] - values['death'] - values['sale']) / opening_population * 100, 2)
+                    if opening_population else 0
+                )
+                population += values['birth'] - values['death'] - values['sale']
+                livestock_metrics['population'].append(max(0, population))
         except Exception as e:
             logging.error(f"Livestock error: {e}")
+            flash('Could not load livestock records and herd analytics.', 'error')
         finally:
             release_db_connection(conn)
     attachments = get_attachments_for(farm_id, ['livestock_group', 'livestock_record'])
-    return render_template('livestock.html', groups=groups, records=records, attachments=attachments)
+    return render_template(
+        'livestock.html',
+        groups=groups,
+        records=records,
+        attachments=attachments,
+        livestock_metrics=livestock_metrics,
+    )
 
 
 @app.route('/livestock/add', methods=['POST'])
@@ -596,17 +799,72 @@ def add_livestock_record():
     quantity = request.form.get('quantity') or None
     cost = request.form.get('cost') or 0
     notes = request.form.get('notes', '').strip()
-    if not all([livestock_group_id, record_type, record_date]):
+    treatment_name = request.form.get('treatment_name', '').strip()
+    dosage = request.form.get('dosage', '').strip()
+    next_due_date = request.form.get('next_due_date') or None
+    animal_count_value = request.form.get('animal_count', '').strip()
+    record_types = {
+        'health', 'vaccination', 'dosing', 'breeding', 'feeding',
+        'movement', 'birth', 'death', 'sale',
+    }
+    if not all([livestock_group_id, record_type, record_date]) or record_type not in record_types:
         flash('Group, type, and date are required.', 'error')
+        return redirect(url_for('livestock'))
+    animal_count = None
+    if animal_count_value:
+        try:
+            animal_count = int(animal_count_value)
+        except ValueError:
+            flash('Animal count must be a whole number.', 'error')
+            return redirect(url_for('livestock'))
+        if animal_count <= 0:
+            flash('Animal count must be greater than zero.', 'error')
+            return redirect(url_for('livestock'))
+    if record_type in {'birth', 'death', 'sale', 'vaccination', 'dosing'} and animal_count is None:
+        flash('Enter the number of animals for this record.', 'error')
+        return redirect(url_for('livestock'))
+    if record_type in {'vaccination', 'dosing'} and not treatment_name:
+        flash('Enter the vaccine or medication name.', 'error')
         return redirect(url_for('livestock'))
     conn = get_db_connection()
     if conn:
         try:
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
+            cursor.execute(
+                "SELECT id, count FROM livestock_groups WHERE id = %s AND farm_id = %s FOR UPDATE",
+                (livestock_group_id, session.get('farm_id')),
+            )
+            group = cursor.fetchone()
+            if not group:
+                flash('Livestock group could not be found for this farm.', 'error')
+                cursor.close()
+                conn.rollback()
+                return redirect(url_for('livestock'))
+            count_change = 0
+            if record_type == 'birth':
+                count_change = animal_count or 0
+            elif record_type in {'death', 'sale'}:
+                count_change = -(animal_count or 0)
+                if int(group['count'] or 0) < (animal_count or 0):
+                    flash('The recorded animals exceed the current group count.', 'error')
+                    cursor.close()
+                    conn.rollback()
+                    return redirect(url_for('livestock'))
             cursor.execute("""
-                INSERT INTO livestock_records (livestock_group_id, record_type, record_date, description, quantity, cost, notes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (livestock_group_id, record_type, record_date, description or None, quantity, cost, notes or None))
+                INSERT INTO livestock_records
+                    (livestock_group_id, record_type, record_date, description, quantity, cost, notes,
+                     animal_count, treatment_name, dosage, next_due_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                livestock_group_id, record_type, record_date, description or None, quantity,
+                cost, notes or None, animal_count, treatment_name or None, dosage or None,
+                next_due_date,
+            ))
+            if count_change:
+                cursor.execute(
+                    "UPDATE livestock_groups SET count = COALESCE(count, 0) + %s WHERE id = %s AND farm_id = %s",
+                    (count_change, livestock_group_id, session.get('farm_id')),
+                )
             conn.commit()
             cursor.close()
             flash('Livestock record added!', 'success')
@@ -626,8 +884,37 @@ def delete_livestock_record(record_id):
     conn = get_db_connection()
     if conn:
         try:
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
+            cursor.execute("""
+                SELECT lr.id, lr.record_type, lr.animal_count, lg.id AS group_id, lg.count
+                FROM livestock_records lr
+                JOIN livestock_groups lg ON lg.id = lr.livestock_group_id
+                WHERE lr.id = %s AND lg.farm_id = %s
+                FOR UPDATE OF lg
+            """, (record_id, session.get('farm_id')))
+            record = cursor.fetchone()
+            if not record:
+                flash('Livestock record could not be found for this farm.', 'error')
+                cursor.close()
+                conn.rollback()
+                return redirect(url_for('livestock'))
+            animal_count = int(record['animal_count'] or 0)
+            reverse_change = 0
+            if record['record_type'] == 'birth':
+                reverse_change = -animal_count
+                if int(record['count'] or 0) < animal_count:
+                    flash('This birth record cannot be removed because the group count has since changed.', 'error')
+                    cursor.close()
+                    conn.rollback()
+                    return redirect(url_for('livestock'))
+            elif record['record_type'] in {'death', 'sale'}:
+                reverse_change = animal_count
             cursor.execute("DELETE FROM livestock_records WHERE id = %s", (record_id,))
+            if reverse_change:
+                cursor.execute(
+                    "UPDATE livestock_groups SET count = COALESCE(count, 0) + %s WHERE id = %s",
+                    (reverse_change, record['group_id']),
+                )
             conn.commit()
             cursor.close()
             flash('Record deleted.', 'success')
