@@ -58,12 +58,11 @@ def inject_globals():
 
 def init_pool():
     global connection_pool
-    if DATABASE_URL and not connection_pool:
-        try:
-            connection_pool = pool.SimpleConnectionPool(1, 10, DATABASE_URL)
-            print("Database connection pool created successfully!")
-        except Exception as e:
-            print(f"Error creating connection pool: {e}")
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL must be set to connect to PostgreSQL.")
+    if not connection_pool:
+        connection_pool = pool.SimpleConnectionPool(1, 10, DATABASE_URL)
+        print("Database connection pool created successfully!")
 
 
 def get_db_connection():
@@ -80,8 +79,7 @@ def release_db_connection(conn):
 def init_db():
     conn = get_db_connection()
     if not conn:
-        print("No DB connection for init_db")
-        return
+        raise RuntimeError("Database connection is unavailable during initialization.")
     try:
         cursor = conn.cursor()
         schema_path = os.path.join(os.path.dirname(__file__), 'database', 'schema_fms.sql')
@@ -90,9 +88,10 @@ def init_db():
         conn.commit()
         cursor.close()
         print("Database initialized successfully!")
-    except Exception as e:
-        print(f"Error initializing database: {e}")
+    except Exception:
+        logging.exception("Error initializing database")
         conn.rollback()
+        raise
     finally:
         release_db_connection(conn)
 
@@ -1365,7 +1364,7 @@ def save_image(file, subfolder, old_path=None):
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext not in IMAGE_EXTENSIONS:
         return None
-    dest_dir = os.path.join(os.path.dirname(__file__), 'static', subfolder)
+    dest_dir = os.path.join(UPLOAD_FOLDER, subfolder)
     os.makedirs(dest_dir, exist_ok=True)
     stored = f"{uuid.uuid4().hex}.{ext}"
     file.save(os.path.join(dest_dir, stored))
@@ -1373,7 +1372,7 @@ def save_image(file, subfolder, old_path=None):
         old_full = os.path.join(os.path.dirname(__file__), 'static', old_path)
         if os.path.exists(old_full):
             os.remove(old_full)
-    return f"{subfolder}/{stored}"
+    return f"uploads/{subfolder}/{stored}"
 
 
 @app.route('/profile', methods=['GET', 'POST'])

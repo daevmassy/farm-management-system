@@ -58,7 +58,7 @@ This system provides a complete solution for managing all aspects of tomato farm
 |-----------|-----------|
 | Frontend | HTML5, CSS3, JavaScript |
 | Backend | Python 3.11, Flask |
-| Database | MySQL |
+| Database | PostgreSQL |
 | Styling | Custom CSS with tomato theme |
 
 ## 📁 Project Structure
@@ -99,51 +99,35 @@ cd tomato-farm-management
 ```
 
 ### Step 2: Install Python Dependencies
-```bash
-pip install flask flask-cors mysql-connector-python
-```
-
-### Step 3: Configure MySQL Database
-
-1. Start your MySQL server
-2. Update database credentials in `app.py`:
-```python
-DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',          # Your MySQL username
-    'password': '',          # Your MySQL password
-    'database': 'farmdb'
-}
-```
-
-### Step 4: Initialize the Database
-
-The application will automatically create the database and tables when you first run it. Alternatively, you can manually import the schema:
 
 ```bash
-mysql -u root -p < database/schema.sql
+pip install -r requirements.txt
 ```
 
-### Step 5: Run the Application
+### Step 3: Configure PostgreSQL Database
+
+Set `DATABASE_URL` to your PostgreSQL connection string and `SESSION_SECRET` to a
+random secret before starting the application.
+
+### Step 4: Initialize and run the application
+
 ```bash
-python app.py
+python main.py
 ```
 
 The application will be available at: `http://localhost:5000`
 
+### Deploy on Render
+
+Create a new Blueprint in Render from this repository and Render will provision
+the Flask web service and PostgreSQL database defined in `render.yaml`. The
+service initializes its tables on startup. The web service and database use
+paid plans; the attached persistent disk keeps uploaded files across deploys.
+
 ## 📊 Database Schema
 
-The system uses the following MySQL tables:
-
-- **farmers** - Farmer information
-- **tomato_plants** - Planting records
-- **harvest** - Harvest tracking
-- **inventory** - Farm supplies and equipment
-- **sales** - Sales transactions
-- **operations** - Farm operations (spraying, weeding, irrigation, etc.)
-- **spraying** - Pesticide application records
-- **weeding** - Weeding activities
-- **irrigation** - Irrigation records
+The PostgreSQL schema in `database/schema_fms.sql` is applied automatically at
+startup.
 
 ## 🎨 Design Features
 
